@@ -1,3 +1,6 @@
+.vscode
+run_system_status_client
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
