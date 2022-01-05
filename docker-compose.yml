@@ -5,7 +5,7 @@ services:
         build:
             context: ./src/
             dockerfile: Dockerfile
-        container_name: proxy-backend
+        container_name: status-server
         restart: unless-stopped
         ports:
             - 5000:5000

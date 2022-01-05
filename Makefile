@@ -2,7 +2,13 @@ REMOVE = rm -rvf
 RUN = bash
 
 all:
-	black .
+	docker-compose build
+client:
+	$(RUN) ./create-runner-script
+server:
+	docker-compose up --build -d
+server-down:
+	docker-compose down
 clean:
 	$(REMOVE) logs
 	$(REMOVE) ./**/logs
