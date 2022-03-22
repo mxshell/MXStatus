@@ -1,6 +1,8 @@
+import json
 from datetime import datetime
 from typing import Dict, List, Tuple
 
+from puts import json_serial
 from pydantic import BaseModel, validator
 
 from .helpers import mask_sensitive_string
@@ -73,3 +75,9 @@ class MachineStatus(BaseModel):
             return v
         else:
             return v
+
+    def __repr__(self) -> str:
+        return json.dumps(self.dict(), indent=4, default=json_serial)
+
+    def __str__(self) -> str:
+        return self.__repr__()

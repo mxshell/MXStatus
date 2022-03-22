@@ -267,8 +267,8 @@ def get_sys_usage() -> Dict[str, float]:
     try:
         info["cpu_usage"] = psutil.cpu_percent() / 100  # 0 ~ 1
         mem = psutil.virtual_memory()
-        info["ram_total"] = mem.total / (1024.0 ** 2)  # MiB
-        info["ram_free"] = mem.available / (1024.0 ** 2)  # MiB
+        info["ram_total"] = mem.total / (1024.0**2)  # MiB
+        info["ram_free"] = mem.available / (1024.0**2)  # MiB
         info["ram_usage"] = round(mem.percent / 100, 5)  # 0 ~ 1
     except Exception as e:
         logger.error(e)
@@ -350,6 +350,15 @@ def get_users_info() -> Dict[str, List[str]]:
 
 ###############################################################################
 ## GPU
+
+
+def _nvidia_exist() -> bool:
+    completed_proc = subprocess.run(
+        "nvidia-smi",
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return completed_proc.returncode == 0
 
 
 def get_gpu_status() -> List[GPUStatus]:
@@ -497,8 +506,9 @@ def get_status() -> MachineStatus:
     status.ram_total = sys_usage.get("ram_total", "")
     status.ram_usage = sys_usage.get("ram_usage", "")
     # GPU
-    status.gpu_status = get_gpu_status()
-    status.gpu_compute_processes = get_gpu_compute_processes()
+    if _nvidia_exist():
+        status.gpu_status = get_gpu_status()
+        status.gpu_compute_processes = get_gpu_compute_processes()
     # USER
     status.users_info = get_users_info()
 
@@ -510,6 +520,8 @@ def get_status() -> MachineStatus:
 
 
 def report_to_server(status: MachineStatus) -> bool:
+    # remove machine time
+    status.created_at = None
     status: dict = dict(status.dict())
     data: str = json.dumps(status, default=json_serial)
     r = requests.post(POST_URL, data=data, headers=HEADERS)
@@ -536,7 +548,7 @@ def main(debug_mode: bool = False) -> None:
             status: MachineStatus = get_status()
             if debug_mode:
                 logger.info(status)
-                continue
+                return
 
             successful = report_to_server(status)
             if successful:
