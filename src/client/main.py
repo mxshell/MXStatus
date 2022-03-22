@@ -267,8 +267,8 @@ def get_sys_usage() -> Dict[str, float]:
     try:
         info["cpu_usage"] = psutil.cpu_percent() / 100  # 0 ~ 1
         mem = psutil.virtual_memory()
-        info["ram_total"] = mem.total / (1024.0**2)  # MiB
-        info["ram_free"] = mem.available / (1024.0**2)  # MiB
+        info["ram_total"] = mem.total / (1024.0 ** 2)  # MiB
+        info["ram_free"] = mem.available / (1024.0 ** 2)  # MiB
         info["ram_usage"] = round(mem.percent / 100, 5)  # 0 ~ 1
     except Exception as e:
         logger.error(e)
@@ -322,6 +322,8 @@ def _get_all_users() -> List[str]:
             5 - user home directory
             6 - optional user command interpreter
             """
+            if line.startswith("#"):
+                continue
             user_data = line.split(":")
             username = user_data[0]
             user_id = user_data[2]
@@ -357,6 +359,7 @@ def _nvidia_exist() -> bool:
         "nvidia-smi",
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        shell=True,
     )
     return completed_proc.returncode == 0
 
@@ -559,6 +562,7 @@ def main(debug_mode: bool = False) -> None:
 
         except Exception as e:
             logger.error(e)
+            # logger.exception(e)
             retry += 5
 
 
