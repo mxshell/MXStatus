@@ -267,8 +267,8 @@ def get_sys_usage() -> Dict[str, float]:
     try:
         info["cpu_usage"] = psutil.cpu_percent() / 100  # 0 ~ 1
         mem = psutil.virtual_memory()
-        info["ram_total"] = mem.total / (1024.0 ** 2)  # MiB
-        info["ram_free"] = mem.available / (1024.0 ** 2)  # MiB
+        info["ram_total"] = mem.total / (1024.0**2)  # MiB
+        info["ram_free"] = mem.available / (1024.0**2)  # MiB
         info["ram_usage"] = round(mem.percent / 100, 5)  # 0 ~ 1
     except Exception as e:
         logger.error(e)
@@ -567,4 +567,4 @@ def main(debug_mode: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    main(debug_mode=False)
+    main(debug_mode=True)
