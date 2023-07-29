@@ -64,4 +64,6 @@ sudo reboot
 ### Client TODOs
 
 -   [ ] Register client as a service on system startup
+    -   Ref: https://medium.com/codex/setup-a-python-script-as-a-service-through-systemctl-systemd-f0cc55a42267
+    -   Ref: https://www.digitalocean.com/community/tutorials/how-to-use-systemctl-to-manage-systemd-services-and-units
 -   [ ] Remove name-based identification of workstations, use Admin User's username as target for status updates
