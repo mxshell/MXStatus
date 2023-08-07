@@ -47,6 +47,7 @@ class MachineStatus(BaseModel):
     platform: str = None
     platform_release: str = None
     platform_version: str = None
+    linux_distro: str = None
     processor: str = None
     uptime: float = None  # seconds
     uptime_str: str = None

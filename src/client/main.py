@@ -162,6 +162,7 @@ def run_command(command: str) -> Tuple[bool, str]:
     """
     Run a shell command and return the output as a string.
     This function wraps `subprocess.run` and handles the exceptions.
+    Some commands may not work due to `subprocess.run` is not running in shell mode.
 
     Args:
         command (str): shell command to run
@@ -179,12 +180,42 @@ def run_command(command: str) -> Tuple[bool, str]:
         if completed_proc.returncode != 0:
             success = False
         else:
-            output = completed_proc.stdout.decode("utf-8").strip()
             success = True
+        output = completed_proc.stdout.decode("utf-8").strip()
     except Exception as e:
         logger.error(e)
         success = False
         output = str(e)
+
+    return success, output
+
+
+def run_shell_command(command: str) -> Tuple[bool, str]:
+    """
+    Run a shell command and return the output as a string.
+    This function wraps `subprocess.run` and handles the exceptions.
+    This function runs `subprocess.run` with `shell=True` to fully emulate shell execution.
+
+    Args:
+        command (str): shell command to run
+
+    Returns:
+        success (bool): whether the command is executed successfully
+        output (str): output of the command
+    """
+    try:
+        completed_proc = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            shell=True,
+        )
+        output = completed_proc.stdout.decode("utf-8").strip()
+        success = True
+    except Exception as e:
+        logger.error(e)
+        output = str(e)
+        success = False
 
     return success, output
 
@@ -218,6 +249,24 @@ def _get_sys_uptime() -> Tuple[float, str]:
         uptime_str = f"{minutes}m"
 
     return uptime, uptime_str
+
+
+def _get_distro() -> str:
+    """Get the name of the Linux distribution.
+
+    Compatibility: All mainstream Linux distributions
+
+    Returns:
+        str: name of the Linux distribution
+
+    Raises:
+        None
+    """
+    cmd = "cat /etc/os-release | grep PRETTY_NAME | cut -d '=' -f 2 | tr -d '\"'"
+    success, output = run_shell_command(cmd)
+    if not success:
+        print(f"Error encountered: {output}")
+    return output if success else "NA"
 
 
 def _get_cpu_model() -> str:
@@ -262,6 +311,7 @@ def get_sys_info() -> Dict[str, str]:
             uptime=uptime,
             uptime_str=uptime_str,
             platform=platform.system(),
+            linux_distro=_get_distro(),
             platform_release=platform.release(),
             platform_version=platform.version(),
             architecture=platform.machine(),
@@ -453,17 +503,11 @@ def get_gpu_status() -> List[GPUStatus]:
     """
     Get GPU utilization info via nvidia-smi command call
     """
-
     cmd = "nvidia-smi --query-gpu=index,gpu_name,utilization.gpu,temperature.gpu,memory.total,memory.used,memory.free --format=csv"
-    completed_proc = subprocess.run(
-        shlex.split(cmd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    if completed_proc.returncode != 0:
+    success, output = run_command(cmd)
+    if not success:
         return []
 
-    output = completed_proc.stdout.decode("utf-8").strip()
     gpu_status_list: List[GPUStatus] = []
     lines = output.split("\n")
     if len(lines) <= 1:
@@ -473,7 +517,7 @@ def get_gpu_status() -> List[GPUStatus]:
         row = row.split(",")
         if len(row) != 7:
             continue
-        gpu_status.index = row[0].strip()
+        gpu_status.index = int(row[0].strip())
         gpu_status.gpu_name = row[1].strip()
         gpu_status.gpu_usage = float(row[2].strip("% ")) / 100
         gpu_status.temperature = float(row[3].strip())
@@ -494,15 +538,10 @@ def _get_gpu_uuid_index_map():
     """
 
     cmd = "nvidia-smi --query-gpu=index,uuid --format=csv"
-    completed_proc = subprocess.run(
-        shlex.split(cmd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    if completed_proc.returncode != 0:
+    success, output = run_command(cmd)
+    if not success:
         return {}
 
-    output = completed_proc.stdout.decode("utf-8").strip()
     gpu_uuid_index_map: Dict[str, int] = {}
     lines = output.split("\n")
     if len(lines) <= 1:
@@ -518,15 +557,10 @@ def _get_gpu_uuid_index_map():
 
 def get_gpu_compute_processes() -> List[GPUComputeProcess]:
     cmd = "nvidia-smi --query-compute-apps=pid,gpu_uuid,used_gpu_memory --format=csv"
-    completed_proc = subprocess.run(
-        shlex.split(cmd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    if completed_proc.returncode != 0:
+    success, output = run_command(cmd)
+    if not success:
         return []
 
-    output = completed_proc.stdout.decode("utf-8").strip()
     gpu_compute_processes: List[GPUComputeProcess] = []
     lines = output.split("\n")
     if len(lines) <= 1:
@@ -543,6 +577,9 @@ def get_gpu_compute_processes() -> List[GPUComputeProcess]:
         gpu_proc.gpu_uuid = row[1].strip()
         gpu_proc.gpu_index = gpu_uuid_index_map.get(gpu_proc.gpu_uuid, -1)
         gpu_proc.gpu_mem_used = float(row[2].strip(" MiB"))
+        # TODO: compute gpu memory usage percentage
+        ...
+
         # get more details of the process from ps
         proc_info: dict = _get_proc_info(gpu_proc.pid)
         gpu_proc.user = proc_info.get("user", "")
@@ -582,8 +619,9 @@ def get_status() -> MachineStatus:
     status.platform = sys_info.get("platform", "")
     status.platform_release = sys_info.get("platform_release", "")
     status.platform_version = sys_info.get("platform_version", "")
+    status.linux_distro = sys_info.get("linux_distro", "")
     status.processor = sys_info.get("processor", "")
-    status.uptime = sys_info.get("uptime", 0)
+    status.uptime = sys_info.get("uptime", 0.0)
     status.uptime_str = sys_info.get("uptime_str", "")
     # CPU
     status.cpu_model = sys_info.get("cpu_model", "")
