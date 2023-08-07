@@ -74,7 +74,7 @@ class MachineStatus(BaseModel):
                 v[keys] = [mask_sensitive_string(user) for user in v[keys]]
             return v
         else:
-            return v
+            return {}
 
     def __repr__(self) -> str:
         return json.dumps(self.dict(), indent=4, default=json_serial)
