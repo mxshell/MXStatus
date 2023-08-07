@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple
 from puts import json_serial
 from pydantic import BaseModel, validator
 
-from .helpers import mask_sensitive_string
+from helpers import mask_sensitive_string
 
 
 class GPUStatus(BaseModel):

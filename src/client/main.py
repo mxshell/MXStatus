@@ -190,16 +190,21 @@ def run_command(command: str) -> Tuple[bool, str]:
 
 
 def _get_sys_uptime() -> Tuple[float, str]:
-    cmd = "cat /proc/uptime"
-    completed_proc = subprocess.run(
-        shlex.split(cmd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    if completed_proc.returncode != 0:
-        return 0, "NA"
+    """Get the system uptime.
+    Compatibility: All mainstream Linux distributions
 
-    output = completed_proc.stdout.decode("utf-8").strip()
+    Returns:
+        float: system uptime in seconds
+        str: system uptime in human readable format
+
+    Raises:
+        None
+    """
+    cmd = "cat /proc/uptime"
+    success, output = run_command(cmd)
+    if not success:
+        return -1, "NA"
+
     uptime = float(output.split()[0])
     days = int(uptime // 86400)
     hours = int((uptime % 86400) // 3600)
@@ -216,13 +221,14 @@ def _get_sys_uptime() -> Tuple[float, str]:
 
 
 def _get_cpu_model() -> str:
-    """
-    Get the CPU model name
-
-    awk -F: '/model name/ {name=$2} END {print name}' /proc/cpuinfo
-
+    """Get the CPU model name.
     Compatibility: All mainstream Linux distributions
 
+    Returns:
+        str: CPU model name
+
+    Raises:
+        None
     """
     cmd = "awk -F: '/model name/ {name=$2} END {print name}' /proc/cpuinfo"
     success, output = run_command(cmd)
@@ -230,17 +236,18 @@ def _get_cpu_model() -> str:
 
 
 def _get_cpu_cores() -> int:
-    cmd = "awk -F: '/model name/ {core++} END {print core}' /proc/cpuinfo"
-    completed_proc = subprocess.run(
-        shlex.split(cmd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    if completed_proc.returncode != 0:
-        return 0
+    """Get the number of CPU cores.
+    Compatibility: All mainstream Linux distributions
 
-    output = completed_proc.stdout.decode("utf-8").strip()
-    return int(output)
+    Returns:
+        int: number of CPU cores
+
+    Raises:
+        None
+    """
+    cmd = "awk -F: '/processor/ {core++} END {print core}' /proc/cpuinfo"
+    success, output = run_command(cmd)
+    return int(output) if success else 0
 
 
 def _get_mac_address() -> str:
