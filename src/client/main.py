@@ -18,10 +18,7 @@ import psutil
 import requests
 from puts import get_logger, json_serial
 
-src_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(src_dir))
-
-from common.data_model import GPUComputeProcess, GPUStatus, MachineStatus
+from data_model import GPUComputeProcess, GPUStatus, MachineStatus
 
 logger = get_logger()
 logger.setLevel(INFO)
@@ -108,6 +105,20 @@ def get_ip() -> str:
 
 
 def get_public_ip() -> str:
+    """
+    Get the public IP address of the current machine
+
+    To minimize the number of requests, we cache the public IP address once obtained.
+    The cache is stored in the global variable `PUBLIC_IP`.
+    When the cache is empty, we make a request to ipify.org to get the public IP address.
+    The correctness of the IP address is not guaranteed.
+
+    Returns:
+        str: public IP address
+
+    Raises:
+        Strictly no exception is raised.
+    """
     global PUBLIC_IP
     if not PUBLIC_IP:
         try:
@@ -147,6 +158,37 @@ def get_fans_status():
 ## System
 
 
+def run_command(command: str) -> Tuple[bool, str]:
+    """
+    Run a shell command and return the output as a string.
+    This function wraps `subprocess.run` and handles the exceptions.
+
+    Args:
+        command (str): shell command to run
+
+    Returns:
+        success (bool): whether the command is executed successfully
+        output (str): output of the command
+    """
+    try:
+        completed_proc = subprocess.run(
+            shlex.split(command),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if completed_proc.returncode != 0:
+            success = False
+        else:
+            output = completed_proc.stdout.decode("utf-8").strip()
+            success = True
+    except Exception as e:
+        logger.error(e)
+        success = False
+        output = str(e)
+
+    return success, output
+
+
 def _get_sys_uptime() -> Tuple[float, str]:
     cmd = "cat /proc/uptime"
     completed_proc = subprocess.run(
@@ -174,17 +216,17 @@ def _get_sys_uptime() -> Tuple[float, str]:
 
 
 def _get_cpu_model() -> str:
-    cmd = "awk -F: '/model name/ {name=$2} END {print name}' /proc/cpuinfo"
-    completed_proc = subprocess.run(
-        shlex.split(cmd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    if completed_proc.returncode != 0:
-        return "NA"
+    """
+    Get the CPU model name
 
-    output = completed_proc.stdout.decode("utf-8").strip()
-    return output
+    awk -F: '/model name/ {name=$2} END {print name}' /proc/cpuinfo
+
+    Compatibility: All mainstream Linux distributions
+
+    """
+    cmd = "awk -F: '/model name/ {name=$2} END {print name}' /proc/cpuinfo"
+    success, output = run_command(cmd)
+    return output if success else "NA"
 
 
 def _get_cpu_cores() -> int:
