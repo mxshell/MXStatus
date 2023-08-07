@@ -330,73 +330,102 @@ def get_sys_usage() -> Dict[str, float]:
 
 
 def _get_online_users() -> List[str]:
-    completed_proc = subprocess.run(
-        "users",
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    if completed_proc.returncode != 0:
-        return []
+    """
+    Get a list of users who are currently logged in.
 
-    output = completed_proc.stdout.decode("utf-8").strip()
-    online_users = list(set(output.split()))
-    return online_users
+    Returns:
+        List[str]: a list of usernames
+
+    Raises:
+        None, all errors should be handled internally.
+    """
+    success, output = run_command("users")
+    if success:
+        return list(set(output.split()))
+    else:
+        return []
 
 
 def _get_all_users() -> List[str]:
+    """
+    Get a list of all users on the system.
+
+    Returns:
+        List[str]: a list of usernames
+
+    Raises:
+        None, all errors should be handled internally.
+    """
     passwd_file = Path("/etc/passwd")
     all_users: List[str] = []
 
     if not passwd_file.exists():
         return []
 
-    with passwd_file.open(mode="r") as f:
-        lines = f.readlines()
-        f.close()
+    try:
+        with passwd_file.open(mode="r") as f:
+            lines = f.readlines()
 
-    for line in lines:
-        line = str(line).strip()
-        if line:
-            """
-            Ref: https://askubuntu.com/a/725122
+        for line in lines:
+            line = str(line).strip()
+            if line:
+                """
+                Ref: https://askubuntu.com/a/725122
 
-            /etc/passwd contains one line for each user account, with seven fields
-            delimited by colons (“:”). These fields are:
+                /etc/passwd contains one line for each user account, with seven fields
+                delimited by colons (“:”). These fields are:
 
-            0 - login name
-            1 - optional encrypted password
-            2 - numerical user ID
-            3 - numerical group ID
-            4 - user name or comment field
-            5 - user home directory
-            6 - optional user command interpreter
-            """
-            if line.startswith("#"):
-                continue
-            user_data = line.split(":")
-            username = user_data[0]
-            user_id = user_data[2]
-            if 1000 <= int(user_id) <= 60000:
-                all_users.append(username)
+                0 - login name
+                1 - optional encrypted password
+                2 - numerical user ID
+                3 - numerical group ID
+                4 - user name or comment field
+                5 - user home directory
+                6 - optional user command interpreter
+                """
+                if line.startswith("#"):
+                    continue
+                user_data = line.split(":")
+                username = user_data[0]
+                user_id = user_data[2]
+                if 1000 <= int(user_id) <= 60000:
+                    all_users.append(username)
 
-    all_users = list(set(all_users))
+        all_users = list(set(all_users))
+    except Exception as e:
+        logger.error(e)
+        all_users = []
+
     return all_users
 
 
 def get_users_info() -> Dict[str, List[str]]:
+    """
+    Get a dictionary containing all users, online users and offline users.
+
+    Returns:
+        Dict[str, List[str]]: a dictionary containing all users, online users and offline users.
+                              The keys are "all_users", "online_users" and "offline_users".
+                              The values are lists of usernames.
+
+    Raises:
+        None, all errors should be handled internally.
+    """
     online_users = _get_online_users()
     all_users = _get_all_users()
+
+    # make a shallow copy of all_users
     offline_users = all_users[:]
+    # get offline users by removing online users
     for u in online_users:
         if u in offline_users:
             offline_users.remove(u)
 
-    users = {
-        "all_users": all_users,
-        "online_users": online_users,
-        "offline_users": offline_users,
-    }
-    return users
+    return dict(
+        all_users=all_users,
+        online_users=online_users,
+        offline_users=offline_users,
+    )
 
 
 ###############################################################################
@@ -404,6 +433,13 @@ def get_users_info() -> Dict[str, List[str]]:
 
 
 def _nvidia_exist() -> bool:
+    """
+    Check if nvidia-smi command exists and GPU is detected.
+
+    Returns:
+        bool: True if nvidia-smi command exists and GPU is detected.
+              False otherwise.
+    """
     completed_proc = subprocess.run(
         "nvidia-smi",
         stdout=subprocess.DEVNULL,
