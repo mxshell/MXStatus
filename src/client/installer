@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+
+service_name="MXShellClient"
+service_description="MXShell System Status Reporting Service"
+
+get_python_path() {
+    local python_path=""
+    
+    # Try to find python3 in common locations
+    if command -v python3 > /dev/null 2>&1; then
+        python_path=$(command -v python3)
+    elif command -v python > /dev/null 2>&1; then
+        python_path=$(command -v python)
+    else
+        echo "Python3 executable not found. Please make sure python3 is installed."
+        exit 1
+    fi
+    
+    echo "$python_path"
+}
+
+# Get the path of this script
+installer_path="$(realpath $0)"
+# Get the path of the directory containing this script as the working directory
+working_directory="$(dirname $installer_path)"
+# Get the current user
+username="$(whoami)"
+# Get the path of the python3 executable
+python_path=$(get_python_path)
+# Get the full path of the target script
+script_path="$(realpath $working_directory/main.py)"
+
+
+obtain_privileges() {
+    # Obtain root privileges
+    if [ "$EUID" -ne 0 ]; then
+        sudo "$0" "$@"
+        exit $?
+    fi
+}
+
+install_service() {
+    # Create the service unit file content
+    local service_content="[Unit]
+Description=$service_name
+After=network.target
+
+[Service]
+User=$username
+ExecStart=$python_path $script_path
+WorkingDirectory=$working_directory
+Restart=always
+
+[Install]
+WantedBy=multi-user.target"
+
+    # Define the service unit file path
+    local service_file_path="/etc/systemd/system/$service_name.service"
+
+    # Write the service unit file
+    echo "$service_content" | sudo tee "$service_file_path" > /dev/null
+    
+    # Reload systemd configuration
+    sudo systemctl daemon-reload
+
+    # Enable the service to start on boot
+    sudo systemctl enable "$service_name"
+
+    # Start the service immediately
+    sudo systemctl start "$service_name"
+
+    # Success message
+    echo "Service '$service_name' install successfully."
+    echo "To check the status of the service, run: sudo systemctl status $service_name"
+}
+
+uninstall_service() {
+    # Stop and disable the service
+    sudo systemctl stop "$service_name"
+    sudo systemctl disable "$service_name"
+    
+    # Remove the service unit file
+    sudo rm "/etc/systemd/system/$service_name.service"
+    
+    # Reload systemd configuration
+    sudo systemctl daemon-reload
+    
+    echo "Service '$service_name' removed successfully."
+}
+
+# define colors
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+yellow=$(tput setaf 3)
+blue=$(tput setaf 4)
+cyan=$(tput setaf 6)
+normal=$(tput sgr0)
+
+function p_green {
+    printf "${green}%s${normal}\n" "$@"
+}
+
+function p_cyan {
+    printf "${cyan}%s${normal}\n" "$@"
+}
+
+if [ $# -lt 2 ]; then
+    # If no arguments are provided, perform a dry run
+    set -- "dryrun" "$@"
+fi
+
+action="$1"
+
+case "$action" in
+    check|dryrun)
+        echo "------------------ Client Installer Dry Run ------------------"
+        echo -n "Service name             : " && p_cyan "$service_name"
+        echo -n "Service description      : " && p_cyan "$service_description"
+        echo -n "Python path              : " && p_green "$python_path"
+        echo -n "Target script path       : " && p_green "$script_path"
+        echo -n "Target working directory : " && p_green "$working_directory"
+        echo -n "Target script runner     : " && p_green "$username"
+        echo "-------------------------------------------------------------"
+        echo "Usage: bash $0 <action>"
+        echo "  <action> can be one of: install, uninstall"
+        ;;
+    install)
+        obtain_privileges
+        install_service
+        ;;
+    uninstall)
+        obtain_privileges
+        uninstall_service
+        ;;
+    *)
+        echo "Unknown action: $action"
+        exit 1
+        ;;
+esac
