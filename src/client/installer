@@ -31,15 +31,8 @@ python_path=$(get_python_path)
 script_path="$(realpath $working_directory/main.py)"
 
 
-obtain_privileges() {
-    # Obtain root privileges
-    if [ "$EUID" -ne 0 ]; then
-        sudo "$0" "$@"
-        exit $?
-    fi
-}
-
-install_service() {
+function install_service {
+    echo "Installing service '$service_name'..."
     # Create the service unit file content
     local service_content="[Unit]
 Description=$service_name
@@ -74,7 +67,8 @@ WantedBy=multi-user.target"
     echo "To check the status of the service, run: sudo systemctl status $service_name"
 }
 
-uninstall_service() {
+function uninstall_service {
+    echo "Removing service '$service_name'..."
     # Stop and disable the service
     sudo systemctl stop "$service_name"
     sudo systemctl disable "$service_name"
@@ -104,15 +98,17 @@ function p_cyan {
     printf "${cyan}%s${normal}\n" "$@"
 }
 
-if [ $# -lt 2 ]; then
-    # If no arguments are provided, perform a dry run
-    set -- "dryrun" "$@"
+if [ $# -lt 1 ]; then
+    # If no action is provided, perform a dry run by default
+    action="dryrun"
+else
+    action="$1"
 fi
 
-action="$1"
+echo "Action: $action"
 
 case "$action" in
-    check|dryrun)
+    dryrun)
         echo "------------------ Client Installer Dry Run ------------------"
         echo -n "Service name             : " && p_cyan "$service_name"
         echo -n "Service description      : " && p_cyan "$service_description"
@@ -125,11 +121,9 @@ case "$action" in
         echo "  <action> can be one of: install, uninstall"
         ;;
     install)
-        obtain_privileges
         install_service
         ;;
     uninstall)
-        obtain_privileges
         uninstall_service
         ;;
     *)
