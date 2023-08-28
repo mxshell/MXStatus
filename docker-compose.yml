@@ -3,7 +3,7 @@ version: "3.4"
 services:
     api:
         build:
-            context: ./src/
+            context: .
             network: host
             dockerfile: Dockerfile
         container_name: status-server
@@ -13,9 +13,8 @@ services:
         environment:
             TZ: "Asia/Singapore"
             PORT: "5000"
-            MODULE_NAME: "api.server.main"
+            MODULE_NAME: "server.main"
             LOG_LEVEL: "debug"
-            PRE_START_PATH: "/app/api/server/prestart.sh"
             # Gunicorn workers
             MAX_WORKERS: "2"
         volumes:

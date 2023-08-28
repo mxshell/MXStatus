@@ -1,14 +1,15 @@
 REMOVE = rm -rvf
-RUN = bash
 
 all:
 	docker compose build
-client:
-	$(RUN) ./create-runner-script
-server:
+client-up:
+	bash ./client/installer install
+client-down:
+    bash ./client/installer uninstall
+server-up:
 	docker compose up --build -d
 server-down:
-	docker compose down
+	docker compose down --rmi all
 clean:
 	$(REMOVE) logs
 	$(REMOVE) ./**/logs

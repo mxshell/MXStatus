@@ -3,12 +3,12 @@ import sys
 from datetime import datetime
 from logging import DEBUG, INFO
 
-import api.server.database as db
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from puts import get_logger
 
-from .data_model import MachineStatus
+import server.database as db
+from server.data_model import MachineStatus
 
 logger = get_logger()
 logger.setLevel(DEBUG)

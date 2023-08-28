@@ -2,55 +2,79 @@
 
 Centralized Status Monitoring for Multiple Linux Workstations
 
-## Deploy Server
+## Deployment
+
+### Deploy Server
 
 -   Server is deployed on a public accessible server with fixed IP address.
 -   Server is to receive status updates from multiple clients.
--   Server is deployed via [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/overview/).
+-   Server is deployed via [Docker](https://www.docker.com/)
 
 ```bash
-make server
+make server-up
 ```
 
-## Install Client
+or, equivalently
+
+```bash
+docker compose up --build -d
+```
+
+To tear down the server and remove the docker image, run
+
+```bash
+make server-down
+```
+
+### Install Client
 
 -   Client is installed on each workstation that you want to monitor.
 -   Client will be installed on the system and will start running on system startup.
--   Client will in charge of sending status updates to the server.
+-   Client will in charge of reporting status updates to the server.
 
-Step 0: Modify the [create-runner-script](create-runner-script) file to include the IP address of the server.
+Note: Modify the [config file](client/config.json) to change the server address.
 
 ```bash
-nano create-runner-script
+make client-up
 ```
 
-Step 1: Create a runner script
+or, dry-run the installation first by:
 
 ```bash
-make client
+cd client
+# run installer
+bash ./installer
 ```
 
-Step 2: Setup a Cron job to run the runner script on system startup
-
--   Edit Cron job file
-
-    ```bash
-    sudo crontab -e
-    ```
-
--   Add the following line to the end of the file:
-
-    ```bash
-    @reboot /bin/run_system_status_client &
-    ```
-
-Step 3: Reboot the system
+To remove the client from the system, run
 
 ```bash
-sudo reboot
+make client-down
 ```
 
 ## Development
+
+### Setup Environment
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Run Development Server
+
+```bash
+# at project root directory
+uvicorn server.main:app --reload
+```
+
+### Test Client
+
+```bash
+cd client
+python3 main.py
+```
 
 ### Backend TODOs
 
@@ -63,7 +87,5 @@ sudo reboot
 
 ### Client TODOs
 
--   [ ] Register client as a service on system startup
-    -   Ref: https://medium.com/codex/setup-a-python-script-as-a-service-through-systemctl-systemd-f0cc55a42267
-    -   Ref: https://www.digitalocean.com/community/tutorials/how-to-use-systemctl-to-manage-systemd-services-and-units
--   [ ] Remove name-based identification of workstations, use Admin User's username as target for status updates
+-   [x] Register client as a service on system startup
+-   [x] Remove name-based identification of workstations, use Admin User's username as target for status updates
