@@ -13,11 +13,11 @@
 ### Admin Web-Server Communication
 
 -   [ ] Access
-    -   [ ] Sign up
+    -   [ ] Sign up (High priority)
         -   [ ] Sign up using Google
         -   [ ] Sign up using GitHub
         -   [ ] Sign up using email (JWT)
-    -   [ ] Sign in
+    -   [ ] Sign in (High priority)
     -   [ ] Delete account
 -   [ ] `report_key`
     -   [ ] Get all current `report_key`

@@ -82,3 +82,22 @@ class MachineStatus(BaseModel):
 
     def __str__(self) -> str:
         return self.__repr__()
+
+
+##################################################################
+### Web
+
+
+class ViewGroup(BaseModel):
+    view_key: Union[str, None] = None
+    view_name: Union[str, None] = None
+    view_desc: Union[str, None] = None
+    view_enabled: bool = True
+    view_machines: Union[List[str], None] = None
+    view_timer: Union[datetime, None] = None
+
+    def __repr__(self) -> str:
+        return self.model_dump_json()
+
+    def __str__(self) -> str:
+        return self.__repr__()

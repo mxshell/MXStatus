@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from puts import get_logger
 
 import server.database as db
-from server.data_model import MachineStatus
+from server.data_model import MachineStatus, ViewGroup
 
 logger = get_logger()
 logger.setLevel(DEBUG)
@@ -41,8 +41,6 @@ logger.info(f"Python Version  : {sys.version}")
 print()
 
 
-DATA_CACHE = dict()
-
 ###############################################################################
 ## ENDPOINTS
 
@@ -54,38 +52,34 @@ async def read_root():
 
 @app.get("/get")
 async def get_status():
-    return DATA_CACHE
+    return db.database.STATUS_DATA
 
 
-@app.post("/reset")
-async def reset_status():
-    global DATA_CACHE
-
-    for key in DATA_CACHE.keys():
-        DATA_CACHE[key] = {}
-
-    return {"msg": "OK"}
-
-
-@app.post("/post", status_code=201)
-async def post_status(status: MachineStatus):
-    global DATA_CACHE
-
-    report_key = status.report_key
-    if report_key in db.ALL_REPORTKEYS:
-        if report_key not in DATA_CACHE:
-            DATA_CACHE[report_key] = dict()
-
-        machine_id = status.machine_id
-        if not machine_id:
-            raise HTTPException(status_code=400, detail="Empty machine_id")
-
-        # store update
-        DATA_CACHE[report_key][machine_id] = status.model_dump()
-
+@app.post("/report", status_code=201)
+async def report_status(status: MachineStatus):
+    try:
+        db.store_new_report(status)
         logger.debug(
             f"Received status report from: {status.name} ({status.report_key})"
         )
         return {"msg": "OK"}
-    else:
-        raise HTTPException(status_code=401, detail="Invalid report_key")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+###############################################################################
+## Web ENDPOINTS
+
+
+@app.post("/create_view_group", status_code=201)
+async def create_view_group(user_id: str, view_group: ViewGroup):
+    try:
+        db.store_view_group(user_id, view_group)
+        logger.debug(f"Created view group: {view_group.view_key} for {user_id}")
+        return {"msg": "OK"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
