@@ -5,20 +5,21 @@ from typing import Dict, List, Optional
 
 # UID-User mapping
 UID_USERS = {
-    "Default": "Default",
+    # UID: User Email
+    "1000": "dev@markhh.com",
 }
 
-# User passcodes (for client reporting)
-USER_PASSCODES = {
+# User report_key mapping
+USER_REPORTKEYS = {
     # user_id: {}
-    "xxxxxxx": {
-        # code: desc
-        "xxxxx@xxxxxxxx.com": "default",
+    "1000": {
+        # report_key: desc
+        "dev@markhh.com": "default",
     },
 }
 
 
-ALL_PASSCODES = set()
+ALL_REPORTKEYS = set(["dev@markhh.com"])
 
 
 def check_user_id(user_id: str) -> bool:
@@ -30,8 +31,8 @@ def check_user_id(user_id: str) -> bool:
     if user_id not in UID_USERS:
         return False
 
-    if user_id not in USER_PASSCODES:
-        USER_PASSCODES[user_id] = {}
+    if user_id not in USER_REPORTKEYS:
+        USER_REPORTKEYS[user_id] = {}
 
     return True
 
@@ -40,39 +41,39 @@ def check_user_id(user_id: str) -> bool:
 ### Reporting Passcode
 
 
-def generate_random_passcode(length: int = 8) -> str:
+def generate_random_report_key(length: int = 8) -> str:
     """
-    Generate a random passcode of the given length
+    Generate a random report_key of the given length
     """
     while True:
         code = "".join(
             random.choices(string.ascii_letters + string.digits, k=length)
         ).upper()
-        if code not in ALL_PASSCODES:
+        if code not in ALL_REPORTKEYS:
             return code
 
 
-def create_new_passcode(
+def create_new_report_key(
     user_id: str,
-    passcode: Optional[str] = "",
-    passcode_desc: Optional[str] = "",
+    report_key: Optional[str] = "",
+    report_key_desc: Optional[str] = "",
 ):
     # check user_id is valid
     valid_uid = check_user_id(user_id)
     if not valid_uid:
         raise ValueError(f"Invalid user_id: {user_id}")
-    # generate a new passcode if not provided
-    if not passcode:
-        passcode = generate_random_passcode()
-    # check passcode is valid and not in use
+    # generate a new report_key if not provided
+    if not report_key:
+        report_key = generate_random_report_key()
+    # check report_key is valid and not in use
     ...  # TODO
-    # check passcode_desc is valid
+    # check report_key is valid
     ...  # TODO
-    # add to passcode list
-    ALL_PASSCODES.add(passcode)
-    # add to user passcode list
-    USER_PASSCODES[user_id][passcode] = passcode_desc
-    return passcode
+    # add to report_key list
+    ALL_REPORTKEYS.add(report_key)
+    # add to user report_key_desc list
+    USER_REPORTKEYS[user_id][report_key] = report_key_desc
+    return report_key
 
 
 def delete_passcode(user_id: str, passcode: str) -> None:
@@ -81,13 +82,13 @@ def delete_passcode(user_id: str, passcode: str) -> None:
     if not valid_uid:
         raise ValueError(f"Invalid user_id: {user_id}")
     # check passcode exists
-    if passcode not in USER_PASSCODES[user_id]:
+    if passcode not in USER_REPORTKEYS[user_id]:
         raise ValueError("Passcode does not exist")  # TODO: maybe refine this
     # remove from user passcode list
-    del USER_PASSCODES[user_id][passcode]
+    del USER_REPORTKEYS[user_id][passcode]
     # remove from passcode list
-    if passcode in ALL_PASSCODES:
-        ALL_PASSCODES.remove(passcode)
+    if passcode in ALL_REPORTKEYS:
+        ALL_REPORTKEYS.remove(passcode)
     else:
         print(
             "Unexpected Error: passcode exists in user list but not in all list, code logic might be wrong"
@@ -235,4 +236,4 @@ def remove_machines_from_team(user_id: str, team_code: str, machine_uuids: List[
 
 
 if __name__ == "__main__":
-    print(generate_random_passcode())
+    print(generate_random_report_key())

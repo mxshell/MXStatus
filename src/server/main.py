@@ -1,13 +1,14 @@
 import os
 import sys
 from datetime import datetime
-from logging import INFO, DEBUG
+from logging import DEBUG, INFO
 
+import api.server.database as db
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from puts import get_logger
 
-from data_model import MachineStatus
+from .data_model import MachineStatus
 
 logger = get_logger()
 logger.setLevel(DEBUG)
@@ -40,11 +41,7 @@ logger.info(f"Python Version  : {sys.version}")
 print()
 
 
-# Client whitelist
-DATA_CACHE = {
-    "Default": {},
-}
-
+DATA_CACHE = dict()
 
 ###############################################################################
 ## ENDPOINTS
@@ -74,8 +71,21 @@ async def reset_status():
 async def post_status(status: MachineStatus):
     global DATA_CACHE
 
-    if status.name in DATA_CACHE:
-        DATA_CACHE[status.name] = status.model_dump()
+    report_key = status.report_key
+    if report_key in db.ALL_REPORTKEYS:
+        if report_key not in DATA_CACHE:
+            DATA_CACHE[report_key] = dict()
+
+        machine_id = status.machine_id
+        if not machine_id:
+            raise HTTPException(status_code=400, detail="Empty machine_id")
+
+        # store update
+        DATA_CACHE[report_key][machine_id] = status.model_dump()
+
+        logger.debug(
+            f"Received status report from: {status.name} ({status.report_key})"
+        )
         return {"msg": "OK"}
     else:
-        raise HTTPException(status_code=401)
+        raise HTTPException(status_code=401, detail="Invalid report_key")

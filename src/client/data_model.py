@@ -33,6 +33,8 @@ class GPUComputeProcess(BaseModel):
 class MachineStatus(BaseModel):
     created_at: datetime = None
     name: str = None
+    machine_id: str = None
+    report_key: str = None
     # ip
     hostname: str = None
     local_ip: str = None

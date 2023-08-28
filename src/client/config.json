@@ -1,0 +1,5 @@
+{
+    "server_address": "http://127.0.0.1:5000",
+    "report_key": "dev@markhh.com",
+    "report_interval": 5
+}

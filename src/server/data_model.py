@@ -1,9 +1,9 @@
 from datetime import datetime
-from typing import Dict, List, Tuple, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel, validator
 
-from helpers import mask_sensitive_string
+from .helpers import mask_sensitive_string
 
 
 class GPUStatus(BaseModel):
@@ -33,6 +33,8 @@ class GPUComputeProcess(BaseModel):
 class MachineStatus(BaseModel):
     created_at: Union[datetime, None] = None
     name: Union[str, None] = None
+    machine_id: Union[str, None] = None
+    report_key: Union[str, None] = None
     # ip
     hostname: Union[str, None] = None
     local_ip: Union[str, None] = None

@@ -1,4 +1,3 @@
-import argparse
 import datetime
 import json
 import platform
@@ -16,54 +15,42 @@ from typing import Dict, List, Tuple
 
 import psutil
 import requests
-from puts import get_logger, json_serial
+from puts import get_logger
 
 from data_model import GPUComputeProcess, GPUStatus, MachineStatus
+from helpers import guid
+
+curr_dir = Path(__file__).resolve().parent
+CONFIG_PATH = curr_dir / "config.json"
 
 logger = get_logger()
 logger.setLevel(INFO)
 
 ###############################################################################
-## Get Argument Parser
+## Get configs from config.json
 
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "-i",
-    "--interval",
-    dest="interval",
-    default=5,
-    help="Interval in number of seconds",
-)
-parser.add_argument(
-    "-n",
-    "--name",
-    dest="name",
-    default="Default",
-    help="Name of current machine",
-)
-parser.add_argument(
-    "-s",
-    "--server",
-    dest="server",
-    default="http://127.0.0.1:5000",
-    help="Server address",
-)
+if not CONFIG_PATH.exists():
+    logger.error(f"Config file not found: {CONFIG_PATH}")
+    sys.exit(1)
 
-args = parser.parse_args()
+with CONFIG_PATH.open(mode="r") as f:
+    configs = json.load(f)
 
-# get value from parser
-INTERVAL = int(args.interval)
-MACHINE_NAME = str(args.name)
-SERVER = str(args.server)
+# get value from configs
+SERVER = str(configs.get("server_address", "http://localhost:5000"))
+REPORT_KEY = str(configs.get("report_key", ""))
+INTERVAL = int(configs.get("report_interval", 5))
+
+if SERVER.endswith("/"):
+    SERVER = SERVER[:-1]
 
 ###############################################################################
 ## Constants
 
-if SERVER.endswith("/"):
-    SERVER = SERVER[:-1]
 POST_URL = SERVER + "/post"
 HEADERS = {"Content-type": "application/json", "Accept": "application/json"}
 PUBLIC_IP: str = ""
+MACHINE_ID = guid()
 
 
 ###############################################################################
@@ -123,7 +110,9 @@ def get_public_ip() -> str:
     if not PUBLIC_IP:
         try:
             # https://www.ipify.org/
-            PUBLIC_IP = requests.get("https://api64.ipify.org").content.decode("utf-8")
+            PUBLIC_IP = requests.get(
+                "https://api64.ipify.org", timeout=5
+            ).content.decode("utf-8")
         except Exception as e:
             logger.error(e)
 
@@ -599,14 +588,15 @@ def get_gpu_compute_processes() -> List[GPUComputeProcess]:
 
 
 def get_status() -> MachineStatus:
-
     ip = get_ip()
     sys_info = get_sys_info()
     sys_usage = get_sys_usage()
 
     status: MachineStatus = MachineStatus()
     # Custom Machine Name
-    status.name = MACHINE_NAME
+    status.name = ip.get("hostname", "")
+    status.machine_id = MACHINE_ID
+    status.report_key = REPORT_KEY
     # Networks
     status.hostname = ip.get("hostname", "")
     status.local_ip = ip.get("local_ip", "")
