@@ -1,9 +1,10 @@
-version: "3"
+version: "3.4"
 
 services:
     api:
         build:
             context: ./src/
+            network: host
             dockerfile: Dockerfile
         container_name: status-server
         restart: unless-stopped

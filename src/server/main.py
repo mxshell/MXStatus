@@ -1,16 +1,16 @@
 import os
 import sys
 from datetime import datetime
-from logging import INFO
+from logging import INFO, DEBUG
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from puts import get_logger
 
-from ..common.data_model import MachineStatus
+from data_model import MachineStatus
 
 logger = get_logger()
-logger.setLevel(INFO)
+logger.setLevel(DEBUG)
 
 ###############################################################################
 # Constants
@@ -75,7 +75,7 @@ async def post_status(status: MachineStatus):
     global DATA_CACHE
 
     if status.name in DATA_CACHE:
-        DATA_CACHE[status.name] = dict(status.dict())
+        DATA_CACHE[status.name] = status.model_dump()
         return {"msg": "OK"}
     else:
         raise HTTPException(status_code=401)

@@ -648,8 +648,7 @@ def get_status() -> MachineStatus:
 def report_to_server(status: MachineStatus) -> bool:
     # remove machine time
     status.created_at = None
-    status: dict = dict(status.dict())
-    data: str = json.dumps(status, default=json_serial)
+    data: str = status.model_dump_json()
     r = requests.post(POST_URL, data=data, headers=HEADERS)
     if r.status_code != 201:
         logger.error(f"status_code: {r.status_code}")
@@ -690,4 +689,4 @@ def main(debug_mode: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    main(debug_mode=True)
+    main(debug_mode=False)
