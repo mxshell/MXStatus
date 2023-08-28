@@ -38,7 +38,7 @@ def check_user_id(user_id: str) -> bool:
 
 
 ###############################################################################
-### Reporting Passcode
+### report_key related helpers
 
 
 def generate_random_report_key(length: int = 8) -> str:
@@ -76,22 +76,22 @@ def create_new_report_key(
     return report_key
 
 
-def delete_passcode(user_id: str, passcode: str) -> None:
+def delete_report_key(user_id: str, report_key: str) -> None:
     # check user_id is valid
     valid_uid = check_user_id(user_id)
     if not valid_uid:
         raise ValueError(f"Invalid user_id: {user_id}")
-    # check passcode exists
-    if passcode not in USER_REPORTKEYS[user_id]:
-        raise ValueError("Passcode does not exist")  # TODO: maybe refine this
-    # remove from user passcode list
-    del USER_REPORTKEYS[user_id][passcode]
-    # remove from passcode list
-    if passcode in ALL_REPORTKEYS:
-        ALL_REPORTKEYS.remove(passcode)
+    # check report_key exists
+    if report_key not in USER_REPORTKEYS[user_id]:
+        raise ValueError("report_key does not exist")  # TODO: maybe refine this
+    # remove from user report_key list
+    del USER_REPORTKEYS[user_id][report_key]
+    # remove from report_key list
+    if report_key in ALL_REPORTKEYS:
+        ALL_REPORTKEYS.remove(report_key)
     else:
         print(
-            "Unexpected Error: passcode exists in user list but not in all list, code logic might be wrong"
+            "Unexpected Error: report_key exists in user list but not in all list, code logic might be wrong"
         )
     return
 

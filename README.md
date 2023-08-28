@@ -41,9 +41,7 @@ make client-up
 or, dry-run the installation first by:
 
 ```bash
-cd client
-# run installer
-bash ./installer
+./client/installer
 ```
 
 To remove the client from the system, run
@@ -75,17 +73,3 @@ uvicorn server.main:app --reload
 cd client
 python3 main.py
 ```
-
-### Backend TODOs
-
--   [ ] User Authentication (JWT + Google OAuth + GitHub OAuth)
--   [ ] Admin User Web APIs
-    -   [ ] create new public/private view group
-    -   [ ] add/remove workstations to/from view group
-    -   [ ] add/remove users to/from view group (TBC)
--   [ ] Generate public view group URL
-
-### Client TODOs
-
--   [x] Register client as a service on system startup
--   [x] Remove name-based identification of workstations, use Admin User's username as target for status updates
