@@ -1,89 +1,118 @@
 # WorkstationStatus
 
-Centralized Status Monitoring for Multiple Linux Workstations
+_WorkstationStatus is a comprehensive system for monitoring the status of multiple Linux workstations from a centralized server._
 
-## Understand the system structure
+## System Structure
 
-About the **Client**
+#### Client
 
--   Client is installed on each workstation that you want to monitor.
--   Client will actively post its host machine's status to the server.
+The Client component is installed on each workstation that you want to monitor. It actively and periodically posts the host machine's status to the central server.
 
-About the **Server**
+#### Server
 
--   Server is deployed on a public-accessible cloud server with a fixed IP address.
--   Server runs API endpoints to receive status updates from all clients.
+The Server is deployed on a publicly accessible cloud server with a fixed IP address. It runs API endpoints to receive status updates from all clients. It also handles requests from the Web Client.
 
-About the **Web Client**
+#### Web Client
 
--   Web Client is the front-end to interact with the server.
+The Web Client serves as the user interface to interact with the server and view the status of the monitored workstations.
 
 ## Deployment
 
 ### Deploy Server
 
-We use [Docker](https://www.docker.com/) to deploy the server.
+We use Docker for easy server deployment. Follow these steps to get your server up and running:
 
-With the help of [make](https://www.gnu.org/software/make/manual/make.html), simply run the following command at the project root directory:
+1. Make sure you have [Docker](https://docs.docker.com/get-docker/) installed.
 
-```bash
-make server-up
-```
+2. Clone this repository; Navigate to the project root directory.
 
-or, equivalently
+3. Run the following command to deploy the server:
 
-```bash
-docker compose up --build -d
-```
+    ```bash
+    make server-up
+    ```
 
-To tear down the server and remove the docker image, run
+    Alternatively, you can use the following Docker command:
 
-```bash
-make server-down
-```
+    ```bash
+    docker compose up --build -d
+    ```
+
+4. To tear down the server and remove the Docker image, run:
+
+    ```bash
+    make server-down
+    ```
 
 ### Install Client
 
-Client will be registered as a systemd service managed by the [systemd](https://wiki.archlinux.org/title/systemd) and will be started automatically after booting.
+To install the Client on your workstations:
 
-Note: Modify the [config file](client/config.json) to change the server address.
+1. Clone this repository to a permanent location on your workstation; Navigate to the project root directory.
 
-```bash
-make client-up
-```
+2. Ensure that you have modified the [config file](client/config.json) to specify the server address.
 
-or, dry-run the installation first by:
+3. Run the following command to register the Client as a systemd service, which will automatically start after booting:
 
-```bash
-./client/installer
-```
+    ```bash
+    make client-up
+    ```
 
-To remove the client from the system, run
+    Alternatively, you can dry-run the installation first with:
 
-```bash
-make client-down
-```
+    ```bash
+    ./client/installer
+    ```
+
+4. To remove the Client from a workstation, run:
+
+    ```bash
+    make client-down
+    ```
 
 ## Development
 
+This section is for developers who want to contribute to the development of WorkstationStatus.
+
 ### Setup Environment
 
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+To set up the development environment:
+
+1. Create a virtual environment:
+
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+
+2. Install the required dependencies:
+
+    ```bash
+    pip install -r requirements.txt
+    ```
 
 ### Run Development Server
 
+To run the development server, use the following command from the project root directory:
+
 ```bash
-# at project root directory
 uvicorn server.main:app --reload
 ```
 
-### Test Client
+### Run Client
 
-```bash
-cd client
-python3 main.py
-```
+For testing the Client component:
+
+1. Navigate to the 'client' directory:
+
+    ```bash
+    cd client
+    ```
+
+2. Run the Client using:
+
+    ```bash
+    python3 main.py
+    ```
+
+Feel free to explore and contribute to the development of WorkstationStatus!
