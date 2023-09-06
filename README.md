@@ -2,13 +2,29 @@
 
 Centralized Status Monitoring for Multiple Linux Workstations
 
+## Understand the system structure
+
+About the **Client**
+
+-   Client is installed on each workstation that you want to monitor.
+-   Client will actively post its host machine's status to the server.
+
+About the **Server**
+
+-   Server is deployed on a public-accessible cloud server with a fixed IP address.
+-   Server runs API endpoints to receive status updates from all clients.
+
+About the **Web Client**
+
+-   Web Client is the front-end to interact with the server.
+
 ## Deployment
 
 ### Deploy Server
 
--   Server is deployed on a public accessible server with fixed IP address.
--   Server is to receive status updates from multiple clients.
--   Server is deployed via [Docker](https://www.docker.com/)
+We use [Docker](https://www.docker.com/) to deploy the server.
+
+With the help of [make](https://www.gnu.org/software/make/manual/make.html), simply run the following command at the project root directory:
 
 ```bash
 make server-up
@@ -28,9 +44,7 @@ make server-down
 
 ### Install Client
 
--   Client is installed on each workstation that you want to monitor.
--   Client will be installed on the system and will start running on system startup.
--   Client will in charge of reporting status updates to the server.
+Client will be registered as a systemd service managed by the [systemd](https://wiki.archlinux.org/title/systemd) and will be started automatically after booting.
 
 Note: Modify the [config file](client/config.json) to change the server address.
 
