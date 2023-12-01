@@ -50,25 +50,38 @@ To install the Client on your workstations:
 
 1. Clone this repository to a permanent location on your workstation; Navigate to the project root directory.
 
-2. Ensure that you have modified the [config file](client/config.json) to specify the server address.
-
-3. Run the following command to register the Client as a systemd service, which will automatically start after booting:
+2. Prepare a Python virtual environment for the Client:
 
     ```bash
-    make client-up
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
     ```
 
-    Alternatively, you can dry-run the installation first with:
+3. Ensure that you have modified the [config file](client/config.json) to specify the server address.
+4. Dry-run the installation:
 
     ```bash
     ./client/installer
     ```
 
-4. To remove the Client from a workstation, run:
+    Check the output of the dry-run to verify that the installation script is able to detect the correct Python virtual environment.
+
+5. Run the actual installation:
 
     ```bash
-    make client-down
+    make client-up
     ```
+
+    The installation script will create a systemd service to run the Client in the background. The service will be started automatically when the workstation boots up.
+
+### Uninstall Client
+
+To remove the Client from a workstation, run:
+
+```bash
+make client-down
+```
 
 ## Development
 
