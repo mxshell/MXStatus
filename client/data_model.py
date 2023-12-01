@@ -21,11 +21,13 @@ class GPUComputeProcess(BaseModel):
     user: str = None
     gpu_uuid: str = None
     gpu_index: int = None
-    gpu_mem_used: float = None  # MB
+    gpu_mem_used: float = None  # MiB
+    gpu_mem_unit: str = "MiB"
     gpu_mem_usage: float = None  # range: [0, 1]
     cpu_usage: float = None  # range: [0, 1]
     cpu_mem_usage: float = None  # range: [0, 1]
     proc_uptime: float = None  # seconds
+    proc_uptime_unit: str = "seconds"
     proc_uptime_str: str = None  # HH:MM:SS
     command: str = None
 
@@ -50,13 +52,15 @@ class MachineStatus(BaseModel):
     linux_distro: str = None
     processor: str = None
     uptime: float = None  # seconds
+    uptime_unit: str = "seconds"
     uptime_str: str = None
     # sys usage
     cpu_model: str = None
     cpu_cores: int = None
     cpu_usage: float = None  # range: [0, 1]
-    ram_free: float = None  # MB
-    ram_total: float = None  # MB
+    ram_free: float = None  # MiB
+    ram_total: float = None  # MiB
+    ram_unit: str = "MiB"
     ram_usage: float = None  # range: [0, 1]
     # gpu usage
     gpu_status: List[GPUStatus] = None

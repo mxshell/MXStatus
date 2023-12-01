@@ -47,7 +47,7 @@ if SERVER.endswith("/"):
 ###############################################################################
 ## Constants
 
-POST_URL = SERVER + "/post"
+POST_URL = SERVER + "/report"
 HEADERS = {"Content-type": "application/json", "Accept": "application/json"}
 PUBLIC_IP: str = ""
 MACHINE_ID = guid()
@@ -57,11 +57,23 @@ MACHINE_ID = guid()
 ## Networks
 
 
-def is_connected() -> bool:
-    # https://stackoverflow.com/a/40283805
+def google_is_reachable():
     try:
-        # connect to the host -- tells us if the host is actually reachable
-        socket.create_connection(("1.1.1.1", 53))
+        sock = socket.create_connection(("www.google.com", 80))
+        if sock is not None:
+            sock.close()
+        return True
+    except OSError:
+        pass
+    return False
+
+
+def is_connected() -> bool:
+    # Ref: https://stackoverflow.com/a/40283805
+    try:
+        sock = socket.create_connection(("1.1.1.1", 53))
+        if sock is not None:
+            sock.close()
         return True
     except OSError:
         pass
@@ -648,34 +660,37 @@ def report_to_server(status: MachineStatus) -> bool:
 
 
 def main(debug_mode: bool = False) -> None:
-    retry = 0
+    recovery_delay = 0  # seconds
+    if debug_mode:
+        from pprint import pprint
 
     while True:
-        sleep(INTERVAL)
-        sleep(retry)
-
         try:
             if not is_connected():
                 logger.warning("Not Connected to Internet.")
-                retry += 5
+                recovery_delay += 5
                 continue
 
             status: MachineStatus = get_status()
             if debug_mode:
-                logger.info(status)
+                pprint(status.__dict__)
                 return
 
             successful = report_to_server(status)
             if successful:
-                retry = 0
+                recovery_delay = 0
                 print("201 OK")
             else:
-                retry += 5
+                recovery_delay += 5
 
         except Exception as e:
             logger.error(e)
             # logger.exception(e)
-            retry += 5
+            recovery_delay += 5
+
+        # sleep for a while
+        print(f"Next status report in {INTERVAL + recovery_delay} seconds...")
+        sleep(INTERVAL + recovery_delay)
 
 
 if __name__ == "__main__":

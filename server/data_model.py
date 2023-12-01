@@ -21,11 +21,13 @@ class GPUComputeProcess(BaseModel):
     user: Union[str, None] = None
     gpu_uuid: Union[str, None] = None
     gpu_index: Union[int, None] = None
-    gpu_mem_used: Union[float, None] = None  # MB
+    gpu_mem_used: Union[float, None] = None  # MiB
+    gpu_mem_unit: Union[str, None] = None
     gpu_mem_usage: Union[float, None] = None  # range: [0, 1]
     cpu_usage: Union[float, None] = None  # range: [0, 1]
     cpu_mem_usage: Union[float, None] = None  # range: [0, 1]
     proc_uptime: Union[float, None] = None  # seconds
+    proc_uptime_unit: Union[str, None] = None
     proc_uptime_str: Union[str, None] = None  # HH:MM:SS
     command: Union[str, None] = None
 
@@ -50,6 +52,7 @@ class MachineStatus(BaseModel):
     linux_distro: Union[str, None] = None
     processor: Union[str, None] = None
     uptime: Union[float, None] = None  # seconds
+    uptime_unit: Union[str, None] = None
     uptime_str: Union[str, None] = None
     # sys usage
     cpu_model: Union[str, None] = None
@@ -57,6 +60,7 @@ class MachineStatus(BaseModel):
     cpu_usage: Union[float, None] = None  # range: [0, 1]
     ram_free: Union[float, None] = None  # MB
     ram_total: Union[float, None] = None  # MB
+    ram_unit: Union[str, None] = None
     ram_usage: Union[float, None] = None  # range: [0, 1]
     # gpu usage
     gpu_status: Union[List[GPUStatus], None] = None
