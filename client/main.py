@@ -8,7 +8,7 @@ import subprocess
 import sys
 import time
 import uuid
-from logging import INFO
+from logging import DEBUG, INFO
 from pathlib import Path
 from time import sleep
 from typing import Dict, List, Tuple
@@ -24,7 +24,7 @@ curr_dir = Path(__file__).resolve().parent
 CONFIG_PATH = curr_dir / "config.json"
 
 logger = get_logger()
-logger.setLevel(INFO)
+logger.setLevel(DEBUG)
 
 ###############################################################################
 ## Get configs from config.json
@@ -51,7 +51,7 @@ POST_URL = SERVER + "/report"
 HEADERS = {"Content-type": "application/json", "Accept": "application/json"}
 PUBLIC_IP: str = ""
 MACHINE_ID = guid()
-
+logger.info(f"This Machine ID: {MACHINE_ID}")
 
 ###############################################################################
 ## Networks
@@ -266,7 +266,7 @@ def _get_distro() -> str:
     cmd = "cat /etc/os-release | grep PRETTY_NAME | cut -d '=' -f 2 | tr -d '\"'"
     success, output = run_shell_command(cmd)
     if not success:
-        print(f"Error encountered: {output}")
+        logger.error(f"Error encountered: {output}")
     return output if success else "NA"
 
 
@@ -679,7 +679,7 @@ def main(debug_mode: bool = False) -> None:
             successful = report_to_server(status)
             if successful:
                 recovery_delay = 0
-                print("201 OK")
+                # logger.debug("201 OK")
             else:
                 recovery_delay += 5
 
@@ -689,7 +689,7 @@ def main(debug_mode: bool = False) -> None:
             recovery_delay += 5
 
         # sleep for a while
-        print(f"Next status report in {INTERVAL + recovery_delay} seconds...")
+        logger.info(f"Next status report in {INTERVAL + recovery_delay} seconds...")
         sleep(INTERVAL + recovery_delay)
 
 

@@ -31,7 +31,7 @@ class Database:
         # All report_key
         self.ALL_REPORT_KEYS: Dict[str, Set[str]] = {
             # report_key: set of machine_id
-            "dev@markhh.com": set(),
+            "dev@markhh.com": set(["f330a5467d474a4c83761c57f9663492"]),
         }
         # All view_key
         self.ALL_VIEW_KEYS: Dict[str, dict] = {
@@ -41,7 +41,7 @@ class Database:
                 "view_name": "Default",
                 "view_desc": "Default",
                 "view_enabled": True,
-                "view_machines": [],
+                "view_machines": ["f330a5467d474a4c83761c57f9663492"],
                 "view_timer": None,
             },
         }
@@ -127,7 +127,8 @@ def get_view(view_key: str) -> Dict[str, Dict[str, MachineStatus]]:
     # TODO: maybe check timer here?
     ...
     # check if view is enabled
-    if not view_group.view_enabled:
+    view_enabled = view_group.get("view_enabled", False)
+    if not view_enabled:
         raise ValueError("View is unavailable.")
     # get machine_id set
     machine_ids = view_group.get("view_machines", [])
