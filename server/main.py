@@ -47,22 +47,42 @@ print()
 
 @app.get("/")
 async def read_root():
-    return {"Hello": "World"}
+    return {"msg": "Hello World. This is MXSHELL API."}
 
 
 @app.get("/get")
 async def get_status():
-    return db.database.STATUS_DATA
+    """Temporary endpoint for testing, will deprecated soon"""
+    return db.DB.STATUS_DATA
 
 
 @app.post("/report", status_code=201)
 async def report_status(status: MachineStatus):
+    """
+    POST Endpoint for receiving status report from client (machines under monitoring).
+    Incoming status report needs to have a valid report_key.
+    Invalid report_key will be rejected.
+    """
     try:
         db.store_new_report(status)
         logger.debug(
-            f"Received status report from: {status.name} ({status.report_key})"
+            f"Received status report from: {status.name} (report_key: {status.report_key})"
         )
         return {"msg": "OK"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/view", status_code=200)
+async def view_status(view_key: str):
+    """
+    POST Endpoint for receiving view request from web (users).
+    Incoming view request needs to have a valid view_key.
+    """
+    try:
+        return db.get_view(view_key)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

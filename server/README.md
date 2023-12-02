@@ -8,16 +8,16 @@
 
 ### Web-Server Communication
 
--   [ ] `view`
+-   [ ] `view` (High priority)
 
 ### Admin Web-Server Communication
 
 -   [ ] Access
-    -   [ ] Sign up (High priority)
+    -   [ ] Sign up
         -   [ ] Sign up using Google
         -   [ ] Sign up using GitHub
         -   [ ] Sign up using email (JWT)
-    -   [ ] Sign in (High priority)
+    -   [ ] Sign in
     -   [ ] Delete account
 -   [ ] `report_key`
     -   [ ] Get all current `report_key`
@@ -27,18 +27,18 @@
     -   [ ] Delete single/multiple `report_key`
 -   [ ] `view_group`
     -   [ ] Get all current `view_group`
-    -   [ ] Create a new `view_group`
-        -   [ ] Use a custom or random `view_key`
+    -   [ ] Create a new `view_group` (High priority)
+        -   [ ] Use a custom or random `view_key` (High priority)
     -   [ ] Edit the name of a `view_group`
     -   [ ] Edit the description of a `view_group`
     -   [ ] Edit the password of a `view_group` (optional) (low priority)
     -   [ ] Delete single/multiple `view_group`
     -   [ ] Enable `view_group`
     -   [ ] Disable `view_group`
-    -   [ ] Auto-Disable Timer (disable after a certain timestamp)
+    -   [ ] Auto-Disable Timer for `view_group` (disable after a certain timestamp)
         -   [ ] Set timer
         -   [ ] Remove timer
-    -   [ ] Add single/multiple `machine_id` to the `view_group`
-    -   [ ] Remove single/multiple `machine_id` from the `view_group`
+    -   [ ] Add single/multiple `machine_id` to the `view_group` (High priority)
+    -   [ ] Remove single/multiple `machine_id` from the `view_group` (High priority)
 -   [ ] `admin_view`: Get the latest machine updates grouped by `report_key`
     -   [ ] Blacklist `machine_id` (for the current user)

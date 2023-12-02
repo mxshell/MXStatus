@@ -109,7 +109,7 @@ To set up the development environment:
 To run the development server, use the following command from the project root directory:
 
 ```bash
-uvicorn server.main:app --reload
+uvicorn server.main:app --reload --port 5000
 ```
 
 ### Run Client
