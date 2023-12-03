@@ -37,12 +37,19 @@ with CONFIG_PATH.open(mode="r") as f:
     configs = json.load(f)
 
 # get value from configs
-SERVER = str(configs.get("server_address", "http://localhost:5000"))
+SERVER = str(configs.get("server_address", ""))
 REPORT_KEY = str(configs.get("report_key", ""))
 INTERVAL = int(configs.get("report_interval", 5))
 
+if not SERVER:
+    logger.error("Server address not found in config.json")
+    sys.exit(1)
+
 if SERVER.endswith("/"):
     SERVER = SERVER[:-1]
+
+if not SERVER.startswith("http"):
+    SERVER = "https://" + SERVER
 
 ###############################################################################
 ## Constants
