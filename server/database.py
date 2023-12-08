@@ -48,7 +48,7 @@ class Database:
         # user_id to view_key to view_group
         self.USER_VIEW_KEYS: Dict[str, Set[str]] = {
             # user_id: set of view_key
-            "1000": ("markhuang",)
+            "1000": set(["markhuang"])
         }
 
 
@@ -68,10 +68,10 @@ def valid_user_id(user_id: str) -> bool:
         return False
 
     if user_id not in DB.USER_REPORT_KEYS:
-        DB.USER_REPORT_KEYS[user_id] = {}
+        DB.USER_REPORT_KEYS[user_id] = dict()
 
     if user_id not in DB.USER_VIEW_KEYS:
-        DB.USER_VIEW_KEYS[user_id] = {}
+        DB.USER_VIEW_KEYS[user_id] = set()
 
     return True
 
@@ -268,7 +268,7 @@ def random_view_key() -> str:
             return code
 
 
-def store_view_group(
+def create_new_view_group(
     user_id: str,
     view_group: ViewGroup,
 ):
@@ -281,7 +281,7 @@ def store_view_group(
     # check view_key is valid
     if not valid_new_view_key(view_group.view_key):
         raise ValueError(
-            "Invalid view_key: view_key is already in use or does not meet requirements"
+            "Invalid view_key: view_key is already in use or does not meet requirements. view_key should only contain letters and digits."
         )
     # check view_machines is valid
     ...
@@ -294,6 +294,10 @@ def store_view_group(
     return view_group
 
 
+def check_view_group(view_key: str) -> Union[ViewGroup, None]:
+    return DB.ALL_VIEW_KEYS.get(view_key)
+
+
 def update_machines_in_view(
     user_id: str,
     view_key: str,
@@ -301,7 +305,7 @@ def update_machines_in_view(
     remove: List[str] = [],
     update: List[str] = [],
     overwrite: bool = False,
-) -> None:
+) -> ViewGroup:
     # check user_id is valid
     if not valid_user_id(user_id):
         raise ValueError(f"Invalid user_id: {user_id}")
@@ -331,7 +335,7 @@ def update_machines_in_view(
         # overwrite machines
         DB.ALL_VIEW_KEYS[view_key]["view_machines"] = list(set(update))
 
-    return
+    return DB.ALL_VIEW_KEYS[view_key]
 
 
 if __name__ == "__main__":

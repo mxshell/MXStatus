@@ -47,7 +47,7 @@ print()
 
 
 @app.get("/")
-async def read_root():
+async def hello():
     return {"msg": "Hello, this is MXShell."}
 
 
@@ -84,10 +84,10 @@ async def report_status(status: MachineStatus):
 ## Web ENDPOINTS
 
 
-@app.post("/view", status_code=200, response_model=List[MachineStatus])
+@app.get("/view", status_code=200, response_model=List[MachineStatus])
 async def view_status(view_key: str):
     """
-    POST Endpoint for receiving view request from web (users).
+    GET Endpoint for receiving view request from web (users).
     Incoming view request needs to have a valid view_key.
     """
     try:
@@ -110,7 +110,8 @@ async def create_report_key(
 ):
     try:
         key_dict = db.create_new_report_key(user_id, report_key, report_key_desc)
-        logger.debug(f"New report key ({report_key}) created for {user_id}")
+        report_key = key_dict.get("report_key", report_key)
+        logger.debug(f"New report key ({report_key}) created for user {user_id}")
         return key_dict
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -130,19 +131,32 @@ async def delete_report_key(user_id: str, report_key: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/create_view_group", status_code=201)
+@app.post("/create_view_group", status_code=201, response_model=ViewGroup)
 async def create_view_group(user_id: str, view_group: ViewGroup):
     try:
-        db.store_view_group(user_id, view_group)
-        logger.debug(f"Created view group: {view_group.view_key} for {user_id}")
-        return {"msg": "OK"}
+        view_group = db.create_new_view_group(user_id, view_group)
+        logger.debug(f"Created view group: {view_group.view_key} for user {user_id}")
+        return view_group
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/add_machines_to_view_group", status_code=200)
+@app.post("/check_view_group", status_code=200, response_model=ViewGroup)
+async def check_view_group(view_key: str):
+    try:
+        view_group = db.check_view_group(view_key)
+        if not view_group:
+            raise HTTPException(status_code=404, detail="Invalid view key")
+        return view_group
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/add_machines_to_view_group", status_code=200, response_model=ViewGroup)
 async def add_machines_to_view_group(user_id: str, view_key: str, machines: List[str]):
     """
     Add machines to a view group.
@@ -153,16 +167,18 @@ async def add_machines_to_view_group(user_id: str, view_key: str, machines: List
         machines (List[str]): a list of machine_id
     """
     try:
-        db.update_machines_in_view(user_id=user_id, view_key=view_key, add=machines)
+        view_group = db.update_machines_in_view(
+            user_id=user_id, view_key=view_key, add=machines
+        )
         logger.debug(f"Added machines to view group: {view_key} for {user_id}")
-        return {"msg": "OK"}
+        return view_group
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/remove_machines_from_view_group", status_code=200)
+@app.post("/remove_machines_from_view_group", status_code=200, response_model=ViewGroup)
 async def remove_machines_from_view_group(
     user_id: str, view_key: str, machines: List[str]
 ):
@@ -175,16 +191,18 @@ async def remove_machines_from_view_group(
         machines (List[str]): a list of machine_id
     """
     try:
-        db.update_machines_in_view(user_id=user_id, view_key=view_key, remove=machines)
+        view_group = db.update_machines_in_view(
+            user_id=user_id, view_key=view_key, remove=machines
+        )
         logger.debug(f"Removed machines from view group: {view_key} for {user_id}")
-        return {"msg": "OK"}
+        return view_group
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/set_machines_in_view_group", status_code=200)
+@app.post("/set_machines_in_view_group", status_code=200, response_model=ViewGroup)
 async def set_machines_in_view_group(user_id: str, view_key: str, machines: List[str]):
     """
     Set machines in a view group.
@@ -195,14 +213,14 @@ async def set_machines_in_view_group(user_id: str, view_key: str, machines: List
         machines (List[str]): a list of machine_id
     """
     try:
-        db.update_machines_in_view(
+        view_group = db.update_machines_in_view(
             user_id=user_id,
             view_key=view_key,
             update=machines,
             overwrite=True,
         )
         logger.debug(f"Set machines in view group: {view_key} for {user_id}")
-        return {"msg": "OK"}
+        return view_group
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
