@@ -16,6 +16,6 @@ services:
             MODULE_NAME: "server.main"
             LOG_LEVEL: "debug"
             # Gunicorn workers
-            MAX_WORKERS: "2"
+            MAX_WORKERS: "1" # stick to 1 worker until setting up multiprocessing for in-memory cache
         volumes:
             - "./logs:/app/logs"
