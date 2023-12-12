@@ -5,7 +5,7 @@ all:
 client-up:
 	bash ./client/installer install
 client-down:
-    bash ./client/installer uninstall
+	bash ./client/installer uninstall
 server-up:
 	docker compose up --build -d
 server-down:
