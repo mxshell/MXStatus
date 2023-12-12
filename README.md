@@ -29,19 +29,13 @@ We use Docker for easy server deployment. Follow these steps to get your server 
 3. Run the following command to deploy the server:
 
     ```bash
-    make server-up
-    ```
-
-    Alternatively, you can use the following Docker command:
-
-    ```bash
     docker compose up --build -d
     ```
 
 4. To tear down the server and remove the Docker image, run:
 
     ```bash
-    make server-down
+    docker compose down --rmi all
     ```
 
 ### Install Client

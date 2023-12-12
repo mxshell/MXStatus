@@ -12,7 +12,7 @@ import server.database as db
 from server.data_model import MachineStatus, ViewGroup
 
 logger = get_logger()
-logger.setLevel(DEBUG)
+logger.setLevel(INFO)
 
 ###############################################################################
 # Constants
@@ -98,6 +98,19 @@ async def view_status(view_key: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/check_view_group", status_code=200, response_model=ViewGroup)
+async def check_view_group(view_key: str):
+    try:
+        view_group = db.check_view_group(view_key)
+        return view_group
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="Invalid view key")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 ###############################################################################
 ## Web Admin ENDPOINTS
 
@@ -136,19 +149,6 @@ async def create_view_group(user_id: str, view_group: ViewGroup):
     try:
         view_group = db.create_new_view_group(user_id, view_group)
         logger.debug(f"Created view group: {view_group.view_key} for user {user_id}")
-        return view_group
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/check_view_group", status_code=200, response_model=ViewGroup)
-async def check_view_group(view_key: str):
-    try:
-        view_group = db.check_view_group(view_key)
-        if not view_group:
-            raise HTTPException(status_code=404, detail="Invalid view key")
         return view_group
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

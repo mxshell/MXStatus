@@ -294,8 +294,20 @@ def create_new_view_group(
     return view_group
 
 
-def check_view_group(view_key: str) -> Union[ViewGroup, None]:
-    return DB.ALL_VIEW_KEYS.get(view_key)
+def check_view_group(view_key: str) -> ViewGroup:
+    """
+    Return the view_group object if view_key exists
+
+    Args:
+        view_key (str): view_key
+
+    Returns:
+        view_group (ViewGroup): view_group object
+
+    Raises:
+        KeyError: view_key does not exist
+    """
+    return DB.ALL_VIEW_KEYS[view_key]
 
 
 def update_machines_in_view(
