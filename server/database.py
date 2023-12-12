@@ -345,7 +345,10 @@ def update_machines_in_view(
         # TODO: maybe some machine_id validation here?
         ...
         # overwrite machines
-        DB.ALL_VIEW_KEYS[view_key]["view_machines"] = list(set(update))
+        assert isinstance(update, list), "update must be a list"
+        assert all(isinstance(x, str) for x in update), "update must be a list of str"
+        assert len(set(update)) == len(update), "duplicate machine_id in update"
+        DB.ALL_VIEW_KEYS[view_key]["view_machines"] = update
 
     return DB.ALL_VIEW_KEYS[view_key]
 
