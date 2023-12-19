@@ -1,12 +1,16 @@
-# WorkstationStatus
+# MXStatus
 
-_WorkstationStatus is a comprehensive system for monitoring the status of multiple Linux workstations from a centralized server._
+_MXStatus is a comprehensive system for monitoring the system status of multiple Linux machines from a centralized server._
 
 ## System Structure
 
+MXStatus is composed of three main components: Client, Server, and Web Client.
+
+<img src="assets/system-structure.jpeg" alt="System Structure" max-width=300 align="center" />
+
 #### Client
 
-The Client component is installed on each workstation that you want to monitor. It actively and periodically posts the host machine's status to the central server.
+The Client component is installed on each Linux machine that you want to monitor. It actively periodically posts the host machine's status to the central server.
 
 #### Server
 
