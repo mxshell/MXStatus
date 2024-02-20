@@ -671,7 +671,16 @@ def main(debug_mode: bool = False) -> None:
     if debug_mode:
         from pprint import pprint
 
+    first_time = True
+
     while True:
+        if first_time:
+            first_time = False
+        else:
+            # sleep for a while
+            logger.info(f"Next status report in {INTERVAL + recovery_delay} seconds...")
+            sleep(INTERVAL + recovery_delay)
+
         try:
             if not is_connected():
                 logger.warning("Not Connected to Internet.")
@@ -694,10 +703,6 @@ def main(debug_mode: bool = False) -> None:
             logger.error(e)
             # logger.exception(e)
             recovery_delay += 5
-
-        # sleep for a while
-        logger.info(f"Next status report in {INTERVAL + recovery_delay} seconds...")
-        sleep(INTERVAL + recovery_delay)
 
 
 if __name__ == "__main__":
