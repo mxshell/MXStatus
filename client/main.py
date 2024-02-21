@@ -23,8 +23,10 @@ from helpers import guid
 curr_dir = Path(__file__).resolve().parent
 CONFIG_PATH = curr_dir / "config.json"
 
-logger = get_logger()
-logger.setLevel(DEBUG)
+# we get a customised logger from puts with max file size of 10MB
+logger = get_logger(max_file_size=10 * 1024 * 1024)  # 10MB
+# keep the next line fixed, only configure the logger level from config.json
+logger.setLevel(INFO)
 
 ###############################################################################
 ## Get configs from config.json
@@ -40,6 +42,7 @@ with CONFIG_PATH.open(mode="r") as f:
 SERVER = str(configs.get("server_address", ""))
 REPORT_KEY = str(configs.get("report_key", ""))
 INTERVAL = int(configs.get("report_interval", 5))
+LOGGER_LVL = str(configs.get("logger_level", "INFO")).upper()
 
 if not SERVER:
     logger.error("Server address not found in config.json")
@@ -50,6 +53,12 @@ if SERVER.endswith("/"):
 
 if not SERVER.startswith("http"):
     SERVER = "https://" + SERVER
+
+# set logger level
+if LOGGER_LVL == "DEBUG":
+    logger.setLevel(DEBUG)
+else:
+    logger.setLevel(INFO)
 
 ###############################################################################
 ## Constants
@@ -674,6 +683,10 @@ def main(debug_mode: bool = False) -> None:
     first_time = True
 
     while True:
+        #######################################################################
+        # 1. Report status to server immediately after the script starts
+        # 2. On subsequent runs, report status to server after every INTERVAL seconds
+        # 3. If any error occurs, wait for (INTERVAL + recovery_delay) seconds before trying again
         if first_time:
             first_time = False
         else:
@@ -681,28 +694,40 @@ def main(debug_mode: bool = False) -> None:
             logger.info(f"Next status report in {INTERVAL + recovery_delay} seconds...")
             sleep(INTERVAL + recovery_delay)
 
+        #######################################################################
+        # Catch all exceptions to prevent the script from crashing
         try:
+            ###################################################################
+            # Check if the machine is connected to the internet
             if not is_connected():
                 logger.warning("Not Connected to Internet.")
+                # Additive recovery delay
                 recovery_delay += 5
                 continue
 
+            # Acquire the current status of the machine
             status: MachineStatus = get_status()
+
+            # Debug mode: print the status to the console once and exit
             if debug_mode:
                 pprint(status.__dict__)
                 return
 
+            # Post the status to the server
             successful = report_to_server(status)
             if successful:
+                logger.info("201 OK. Machine Status posted to server.")
+                # Reset the recovery delay to zero
                 recovery_delay = 0
-                # logger.debug("201 OK")
             else:
+                # Additive recovery delay
                 recovery_delay += 5
 
         except Exception as e:
             logger.error(e)
-            # logger.exception(e)
             recovery_delay += 5
+            if debug_mode:
+                logger.exception(e)
 
 
 if __name__ == "__main__":
