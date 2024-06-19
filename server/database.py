@@ -140,6 +140,30 @@ def get_view(view_key: str) -> Dict[str, Dict[str, MachineStatus]]:
     return status_data
 
 
+def get_view_machine(view_key: str, machine_id: str) -> Union[MachineStatus, None]:
+    # check view_key is valid
+    if view_key not in DB.ALL_VIEW_KEYS:
+        return None
+    # check machine_id is valid
+    if machine_id not in DB.STATUS_DATA:
+        return None
+    # check access permission and stuff...
+    ...
+    # get view_group object
+    view_group = DB.ALL_VIEW_KEYS[view_key]
+    # check if view is enabled
+    view_enabled = view_group.get("view_enabled", False)
+    if not view_enabled:
+        return None
+    # get machine_id set
+    machine_ids = view_group.get("view_machines", [])
+    # check if machine_id is in view
+    if machine_id not in machine_ids:
+        return None
+    # get status data
+    return DB.STATUS_DATA[machine_id]
+
+
 ###############################################################################
 ### report_key related helpers
 

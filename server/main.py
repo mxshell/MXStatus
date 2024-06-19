@@ -98,6 +98,50 @@ async def view_status(view_key: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/view_machine", status_code=200, response_model=MachineStatus)
+async def view_machine(view_key: str, machine_id: str, seconds_to_expire: int = 60 * 5):
+    """
+    GET Endpoint for receiving view_machine request from web (users).
+    This endpoint is used to view status of a specific machine and will return
+    the status of the machine with the given machine_id.
+    The main motivation for this endpoint is for monitoring tools to probe each machine individually.
+
+    Args:
+        view_key (str): a valid view_key is required
+        machine_id (str): the machine_id of the machine to view, this machine_id
+            must be in the view group associated with the view_key
+        seconds_to_expire (int): the number of seconds to consider a status report as expired (default: 300 seconds)
+
+    Returns:
+        MachineStatus: the status of the machine with the given machine_id
+
+    Status Codes:
+        200: OK - Target machine is online and status is returned
+        404: Not Found - Invalid view_key or machine_id
+        417: Expectation Failed - Target machine is offline or status is expired
+        418: I'm a teapot - Target machine's GPU is not available
+    """
+    try:
+        _now = datetime.now()
+        status = db.get_view_machine(view_key, machine_id)
+        if not status:
+            raise HTTPException(status_code=404, detail="Machine Not Found")
+        _created_at = status.created_at
+        _delta = (_now - _created_at).total_seconds()
+        if _delta > seconds_to_expire:
+            raise HTTPException(
+                status_code=417, detail="Status Expired; Machine Offline"
+            )
+        _gpu_status = status.gpu_status
+        if not _gpu_status:
+            raise HTTPException(status_code=418, detail="GPU Not Available")
+        return status
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/check_view_group", status_code=200, response_model=ViewGroup)
 async def check_view_group(view_key: str):
     try:
