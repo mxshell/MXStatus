@@ -123,19 +123,21 @@ async def view_machine(view_key: str, machine_id: str, seconds_to_expire: int = 
     """
     try:
         _now = datetime.now()
-        status = db.get_view_machine(view_key, machine_id)
-        if not status:
+        status_dict = db.get_view_machine(view_key, machine_id)
+        if not status_dict:
             raise HTTPException(status_code=404, detail="Machine Not Found")
-        _created_at = status.created_at
+        _created_at = status_dict.get("created_at", None)
+        if not _created_at:
+            raise ValueError("Invalid status report")
         _delta = (_now - _created_at).total_seconds()
         if _delta > seconds_to_expire:
             raise HTTPException(
                 status_code=417, detail="Status Expired; Machine Offline"
             )
-        _gpu_status = status.gpu_status
+        _gpu_status = status_dict.get("gpu_status", None)
         if not _gpu_status:
             raise HTTPException(status_code=418, detail="GPU Not Available")
-        return status
+        return status_dict
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
