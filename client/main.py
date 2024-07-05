@@ -599,12 +599,17 @@ def get_gpu_compute_processes() -> List[GPUComputeProcess]:
 
         # get more details of the process from ps
         proc_info: dict = _get_proc_info(gpu_proc.pid)
-        gpu_proc.user = proc_info.get("user", "")
-        gpu_proc.cpu_usage = proc_info.get("cpu_usage", "")
-        gpu_proc.cpu_mem_usage = proc_info.get("cpu_mem_usage", "")
+        if not proc_info:
+            # NOTE: if no process info found, likely it is a zombie process
+            proc_info = dict()
+            # TODO: maybe a way to handle zombie process or notify the user
+
+        gpu_proc.user = proc_info.get("user", "NA")
+        gpu_proc.cpu_usage = proc_info.get("cpu_usage", "NA")
+        gpu_proc.cpu_mem_usage = proc_info.get("cpu_mem_usage", "NA")
         gpu_proc.proc_uptime = proc_info.get("proc_uptime", 0)
-        gpu_proc.proc_uptime_str = proc_info.get("proc_uptime_str", "")
-        gpu_proc.command = proc_info.get("command", "")
+        gpu_proc.proc_uptime_str = proc_info.get("proc_uptime_str", "NA")
+        gpu_proc.command = proc_info.get("command", "NA")
 
         gpu_compute_processes.append(gpu_proc)
 
