@@ -604,9 +604,9 @@ def get_gpu_compute_processes() -> List[GPUComputeProcess]:
             proc_info = dict()
             # TODO: maybe a way to handle zombie process or notify the user
 
-        gpu_proc.user = proc_info.get("user", "NA")
-        gpu_proc.cpu_usage = proc_info.get("cpu_usage", "NA")
-        gpu_proc.cpu_mem_usage = proc_info.get("cpu_mem_usage", "NA")
+        gpu_proc.user = proc_info.get("user", "[zombie]")
+        gpu_proc.cpu_usage = proc_info.get("cpu_usage", 0)
+        gpu_proc.cpu_mem_usage = proc_info.get("cpu_mem_usage", 0)
         gpu_proc.proc_uptime = proc_info.get("proc_uptime", 0)
         gpu_proc.proc_uptime_str = proc_info.get("proc_uptime_str", "NA")
         gpu_proc.command = proc_info.get("command", "NA")
