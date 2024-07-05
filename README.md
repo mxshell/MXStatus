@@ -4,7 +4,7 @@ _MXStatus is a comprehensive system for monitoring the system status of multiple
 
 ## System Structure
 
-MXStatus is composed of three main components: Client, Server, and Web Client.
+_MXStatus_ is composed of three main components: Client, Server, and Web Client.
 
 <img src="assets/system-structure.jpeg" alt="System Structure" max-width=300 align="center" />
 
@@ -48,7 +48,7 @@ Please refer to the [Client INSTALL.md](client/INSTALL.md).
 
 ## Development
 
-This section is for developers who want to contribute to the development of WorkstationStatus.
+This section is for developers who want to contribute to the development of _MXStatus_.
 
 ### Setup Environment
 
@@ -91,4 +91,4 @@ For testing the Client component:
     python3 main.py
     ```
 
-Feel free to explore and contribute to the development of WorkstationStatus!
+Feel free to explore and contribute to the development of _MXStatus_!
