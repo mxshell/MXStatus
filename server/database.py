@@ -18,45 +18,80 @@ from server.data_model import MachineStatus, ReportKey, ViewGroup
 """
 Table 1: User Table (Auth)
 
-user_id: str
+    id: str # primary key
+    ...
 
 Table 2: Report Keys
 
     id: str # primary key
     created_at: datetime
     user_id: str # foreign key
-    report_key: str
-    report_key_desc: str
+    report_key: str # Required, UNIQUE
+    report_key_desc: str # Optional, used as display description
+    [TODO] enabled: bool # default True
+
+policies:
+    
+        - select: user can view their own report keys
+        - insert: user can create their own report keys
+        - update: user can update their own report keys
+        - delete: user can delete their own report keys
 
 
 Table 3: View Groups
 
     id: str # primary key
     created_at: datetime
-    user_id: str # foreign key
-    view_key: str # Required, unique
+    user_id: str # foreign key (owner of the view group)
+    view_key: str # Required, UNIQUE
     view_name: str # Required, used as display title, not unique
     view_desc: str # Optional, used as display description
     view_enabled: bool # Required, default True
     view_machines: List[str] # Required, list of machine_id, can be empty
     view_timer: Optional[datetime] # Optional, used for disabling view after a certain time
+    [TODO] view_public: bool # Required, default False, if True, anyone can view this view group
+    [TODO] view_members: List[str] # Optional, list of user_id, can be empty
 
 policies:
 
-    - select: user can view their own view groups
-              anyone can view a specific view group given the view_key
-    - insert: user can create their own view groups
-    - update: user can update their own view groups
-    - delete: user can delete their own view groups
+    - select: user can view their own (created) view groups
+              [TODO][!important] anyone can view a specific view group given the view_key if view_public is True
+              [TODO][!important] authenticated user can view a specific view group given the view_key if they are in view_members
+    - insert: user can create their own (created) view groups
+    - update: user can update their own (created) view groups
+    - delete: user can delete their own (created) view groups
 
 
 Table 4: Machine Status
 
-id: str # primary key
-machine_id: str
-report_key: str
-status: json
+    id: str # primary key
+    created_at: datetime
+    report_key: str # foreign key
+    machine_id: str # Required, UNIQUE
+    status: json # Required, json
 
+policies:
+    
+    - select: user can view their own machine status based on their own report keys
+    - insert: [TODO][!important] anyone can insert a new machine status given a valid report key
+    - update: [TODO][!important] anyone can update a new machine status given a valid report key
+    - delete: user can delete their own machine status based on their own report keys
+
+    [NOTE] The consideration that anyone can insert/update machine status is:
+            1. to allow he machine to report its status without authentication, simplifying the process;
+            2. allow account owner to give out report_key to others without lending their account token to others;
+            3. there is no serious security risk even when report_key are leaked to malicious users, as the 
+            key owner can always delete/disable the report_key and create a new ones.
+        
+
+    
+Table 5: Machine Status History [TODO]
+
+    id: str # primary key
+    created_at: datetime
+    report_key: str # foreign key
+    machine_id: str # Required, UNIQUE
+    history_timestamps: List[datetime] # Required, list of timestamps, can be empty
 
 """
 
@@ -67,65 +102,12 @@ class Database:
             # machine_id: MachineStatus object
             # TODO: future work: use a FIFO fixed size queue to store the last N reports
         }
-        # user_id to user_email
-        self.UID_USERS: Dict[str, str] = {
-            # UID: User Email
-            "1000": "dev@markhh.com",
-        }
-        # user_id to report_key to report_key_desc
-        self.USER_REPORT_KEYS: Dict[str, Dict[str, str]] = {
-            # user_id: {}
-            "1000": {
-                # report_key: desc string
-                "dev@markhh.com": "default",
-            },
-        }
-        # All report_key
-        self.ALL_REPORT_KEYS: Dict[str, Set[str]] = {
-            # report_key: set of machine_id
-            "dev@markhh.com": set(["f330a5467d474a4c83761c57f9663492"]),
-        }
-        # All view_key
-        self.ALL_VIEW_KEYS: Dict[str, dict] = {
-            # view_key: view_group object
-            "markhuang": {
-                "view_key": "markhuang",
-                "view_name": "Default",
-                "view_desc": "Default",
-                "view_enabled": True,
-                "view_machines": ["f330a5467d474a4c83761c57f9663492"],
-                "view_timer": None,
-            },
-        }
-        # user_id to view_key to view_group
-        self.USER_VIEW_KEYS: Dict[str, Set[str]] = {
-            # user_id: set of view_key
-            "1000": set(["markhuang"])
-        }
 
 
 DB = Database()
 
 ###############################################################################
 ### User
-
-
-def valid_user_id(user_id: str) -> bool:
-    """
-    Check if the user_id is valid
-    """
-    if not isinstance(user_id, str):
-        return False
-    if user_id not in DB.UID_USERS:
-        return False
-
-    if user_id not in DB.USER_REPORT_KEYS:
-        DB.USER_REPORT_KEYS[user_id] = dict()
-
-    if user_id not in DB.USER_VIEW_KEYS:
-        DB.USER_VIEW_KEYS[user_id] = set()
-
-    return True
 
 
 def random_key_gen(length: int = 8, digits: bool = True) -> str:
@@ -239,8 +221,8 @@ def valid_new_report_key(report_key: str) -> bool:
     # case insensitive
     report_key = report_key.upper()
 
-    if report_key in DB.ALL_REPORT_KEYS:
-        return False
+    # if report_key in DB.ALL_REPORT_KEYS:
+    #     return False
     if len(report_key) < 8 or len(report_key) > 64:
         return False
     if not report_key.isalnum():
@@ -259,31 +241,31 @@ def random_report_key() -> str:
             return code
 
 
-def create_new_report_key(
-    user_id: str,
-    report_key: Optional[str] = "",
-    report_key_desc: Optional[str] = "",
-):
-    # check user_id is valid
-    if not valid_user_id(user_id):
-        raise ValueError(f"Invalid user_id: {user_id}")
-    # generate a new report_key if not provided
-    if not report_key:
-        report_key = random_report_key()
-    # check report_key is valid
-    if not valid_new_report_key(report_key):
-        raise ValueError(
-            "Invalid report_key: report_key is already in use or does not meet requirements"
-        )
-    # add report_key to DB
-    DB.ALL_REPORT_KEYS[report_key] = set()
-    # add to user report_key_desc map
-    DB.USER_REPORT_KEYS[user_id][report_key] = report_key_desc
+# def create_new_report_key(
+#     user_id: str,
+#     report_key: Optional[str] = "",
+#     report_key_desc: Optional[str] = "",
+# ):
+#     # check user_id is valid
+#     # if not valid_user_id(user_id):
+#     #     raise ValueError(f"Invalid user_id: {user_id}")
+#     # generate a new report_key if not provided
+#     if not report_key:
+#         report_key = random_report_key()
+#     # check report_key is valid
+#     if not valid_new_report_key(report_key):
+#         raise ValueError(
+#             "Invalid report_key: report_key is already in use or does not meet requirements"
+#         )
+#     # add report_key to DB
+#     DB.ALL_REPORT_KEYS[report_key] = set()
+#     # add to user report_key_desc map
+#     DB.USER_REPORT_KEYS[user_id][report_key] = report_key_desc
 
-    return {
-        "report_key": report_key,
-        "report_key_desc": report_key_desc,
-    }
+#     return {
+#         "report_key": report_key,
+#         "report_key_desc": report_key_desc,
+#     }
 
 
 def create_new_report_key_supabase(
@@ -316,23 +298,39 @@ def get_user_report_keys_supabase(supabase: Client) -> List[ReportKey]:
         raise e
 
 
-def delete_report_key(user_id: str, report_key: str) -> None:
-    # check user_id is valid
-    if not valid_user_id(user_id):
-        raise ValueError(f"Invalid user_id: {user_id}")
-    # check report_key exists
-    if report_key not in DB.USER_REPORT_KEYS[user_id]:
-        raise ValueError("report_key does not exist")  # TODO: maybe refine this
-    # remove from user report_key list
-    del DB.USER_REPORT_KEYS[user_id][report_key]
-    # remove from report_key list
-    if report_key in DB.ALL_REPORT_KEYS:
-        del DB.ALL_REPORT_KEYS[report_key]
-    else:
-        print(
-            "Unexpected Error: report_key exists in user list but not in all list, code logic might be wrong"
+# def delete_report_key(user_id: str, report_key: str) -> None:
+#     # check user_id is valid
+#     # if not valid_user_id(user_id):
+#     #     raise ValueError(f"Invalid user_id: {user_id}")
+#     # check report_key exists
+#     if report_key not in DB.USER_REPORT_KEYS[user_id]:
+#         raise ValueError("report_key does not exist")  # TODO: maybe refine this
+#     # remove from user report_key list
+#     del DB.USER_REPORT_KEYS[user_id][report_key]
+#     # remove from report_key list
+#     if report_key in DB.ALL_REPORT_KEYS:
+#         del DB.ALL_REPORT_KEYS[report_key]
+#     else:
+#         print(
+#             "Unexpected Error: report_key exists in user list but not in all list, code logic might be wrong"
+#         )
+#     return
+
+
+def delete_report_key_supabase(supabase: Client, report_key: str) -> None:
+    try:
+        response = (
+            supabase.table("report_keys")
+            .delete()
+            .eq("report_key", report_key)
+            .execute()
         )
-    return
+        data = response.data
+        if not data:
+            raise ValueError("Failed to delete report key")
+        assert len(data) == 1, "Unexpected error: more than one report key deleted"
+    except Exception as e:
+        raise e
 
 
 ###############################################################################
@@ -356,8 +354,6 @@ def valid_new_view_key(view_key: str) -> bool:
     # case insensitive
     view_key = view_key.upper()
 
-    if view_key in DB.ALL_VIEW_KEYS:
-        return False
     if not view_key.isalnum():
         return False
 
@@ -374,30 +370,30 @@ def random_view_key() -> str:
             return code
 
 
-def create_new_view_group(
-    user_id: str,
-    view_group: ViewGroup,
-):
-    # check user_id is valid
-    if not valid_user_id(user_id):
-        raise ValueError(f"Invalid user_id: {user_id}")
-    # generate a new view_key if not provided
-    if not view_group.view_key:
-        view_group.view_key = random_view_key()
-    # check view_key is valid
-    if not valid_new_view_key(view_group.view_key):
-        raise ValueError(
-            "Invalid view_key: view_key is already in use or does not meet requirements. view_key should only contain letters and digits."
-        )
-    # check view_machines is valid
-    ...
-    # check view_timer is valid
-    ...
-    # add to view_key set
-    DB.ALL_VIEW_KEYS[view_group.view_key] = view_group.model_dump()
-    # add to user view_key map
-    DB.USER_VIEW_KEYS[user_id].add(view_group.view_key)
-    return view_group
+# def create_new_view_group(
+#     user_id: str,
+#     view_group: ViewGroup,
+# ):
+#     # check user_id is valid
+#     # if not valid_user_id(user_id):
+#     #     raise ValueError(f"Invalid user_id: {user_id}")
+#     # generate a new view_key if not provided
+#     if not view_group.view_key:
+#         view_group.view_key = random_view_key()
+#     # check view_key is valid
+#     if not valid_new_view_key(view_group.view_key):
+#         raise ValueError(
+#             "Invalid view_key: view_key is already in use or does not meet requirements. view_key should only contain letters and digits."
+#         )
+#     # check view_machines is valid
+#     ...
+#     # check view_timer is valid
+#     ...
+#     # add to view_key set
+#     DB.ALL_VIEW_KEYS[view_group.view_key] = view_group.model_dump()
+#     # add to user view_key map
+#     DB.USER_VIEW_KEYS[user_id].add(view_group.view_key)
+#     return view_group
 
 
 def create_new_view_group_supabase(
@@ -422,20 +418,20 @@ def create_new_view_group_supabase(
         raise e
 
 
-def check_view_group(view_key: str) -> ViewGroup:
-    """
-    Return the view_group object if view_key exists
+# def check_view_group(view_key: str) -> ViewGroup:
+#     """
+#     Return the view_group object if view_key exists
 
-    Args:
-        view_key (str): view_key
+#     Args:
+#         view_key (str): view_key
 
-    Returns:
-        view_group (ViewGroup): view_group object
+#     Returns:
+#         view_group (ViewGroup): view_group object
 
-    Raises:
-        KeyError: view_key does not exist
-    """
-    return DB.ALL_VIEW_KEYS[view_key]
+#     Raises:
+#         KeyError: view_key does not exist
+#     """
+#     return DB.ALL_VIEW_KEYS[view_key]
 
 
 def check_view_group_supabase(supabase: Client, view_key: str) -> ViewGroup:
@@ -443,8 +439,11 @@ def check_view_group_supabase(supabase: Client, view_key: str) -> ViewGroup:
         response = (
             supabase.table("view_groups").select("*").eq("view_key", view_key).execute()
         )
-        data = response.data[0]
-        return ViewGroup(**data)
+        data = response.data
+        if not data:
+            raise ValueError("View group not found")
+        assert len(data) == 1, "Unexpected error: more than one view group found"
+        return ViewGroup(**data[0])
     except Exception as e:
         raise e
 
@@ -455,52 +454,54 @@ def get_user_view_groups_supabase(supabase: Client, user_id: str) -> List[ViewGr
             supabase.table("view_groups").select("*").eq("user_id", user_id).execute()
         )
         data = response.data
+        if not data:
+            raise ValueError("No view groups found")
         return [ViewGroup(**x) for x in data]
     except Exception as e:
         raise e
 
 
-def update_machines_in_view(
-    user_id: str,
-    view_key: str,
-    add: List[str] = [],
-    remove: List[str] = [],
-    update: List[str] = [],
-    overwrite: bool = False,
-) -> ViewGroup:
-    # check user_id is valid
-    if not valid_user_id(user_id):
-        raise ValueError(f"Invalid user_id: {user_id}")
-    # check view_key is valid
-    if view_key not in DB.ALL_VIEW_KEYS:
-        raise ValueError("Invalid view_key")
-    # check view_key belongs to user
-    if view_key not in DB.USER_VIEW_KEYS[user_id]:
-        raise ValueError("Invalid view_key")
-    if not overwrite:
-        # add machines
-        for machine_id in add:
-            if machine_id not in DB.ALL_REPORT_KEYS:
-                # do nothing
-                # this is ok because machine_id might not be reporting yet
-                pass
-            # TODO: maybe some machine_id validation here?
-            ...
-            DB.ALL_VIEW_KEYS[view_key]["view_machines"].append(machine_id)
-        # remove machines
-        for machine_id in remove:
-            if machine_id in DB.ALL_VIEW_KEYS[view_key]["view_machines"]:
-                DB.ALL_VIEW_KEYS[view_key]["view_machines"].remove(machine_id)
-    else:
-        # TODO: maybe some machine_id validation here?
-        ...
-        # overwrite machines
-        assert isinstance(update, list), "update must be a list"
-        assert all(isinstance(x, str) for x in update), "update must be a list of str"
-        assert len(set(update)) == len(update), "duplicate machine_id in update"
-        DB.ALL_VIEW_KEYS[view_key]["view_machines"] = update
+# def update_machines_in_view(
+#     user_id: str,
+#     view_key: str,
+#     add: List[str] = [],
+#     remove: List[str] = [],
+#     update: List[str] = [],
+#     overwrite: bool = False,
+# ) -> ViewGroup:
+#     # check user_id is valid
+#     # if not valid_user_id(user_id):
+#     #     raise ValueError(f"Invalid user_id: {user_id}")
+#     # check view_key is valid
+#     if view_key not in DB.ALL_VIEW_KEYS:
+#         raise ValueError("Invalid view_key")
+#     # check view_key belongs to user
+#     if view_key not in DB.USER_VIEW_KEYS[user_id]:
+#         raise ValueError("Invalid view_key")
+#     if not overwrite:
+#         # add machines
+#         for machine_id in add:
+#             if machine_id not in DB.ALL_REPORT_KEYS:
+#                 # do nothing
+#                 # this is ok because machine_id might not be reporting yet
+#                 pass
+#             # todo: maybe some machine_id validation here?
+#             ...
+#             DB.ALL_VIEW_KEYS[view_key]["view_machines"].append(machine_id)
+#         # remove machines
+#         for machine_id in remove:
+#             if machine_id in DB.ALL_VIEW_KEYS[view_key]["view_machines"]:
+#                 DB.ALL_VIEW_KEYS[view_key]["view_machines"].remove(machine_id)
+#     else:
+#         # todo: maybe some machine_id validation here?
+#         ...
+#         # overwrite machines
+#         assert isinstance(update, list), "update must be a list"
+#         assert all(isinstance(x, str) for x in update), "update must be a list of str"
+#         assert len(set(update)) == len(update), "duplicate machine_id in update"
+#         DB.ALL_VIEW_KEYS[view_key]["view_machines"] = update
 
-    return DB.ALL_VIEW_KEYS[view_key]
+#     return DB.ALL_VIEW_KEYS[view_key]
 
 
 def update_machines_in_view_supabase(
@@ -536,6 +537,7 @@ def update_machines_in_view_supabase(
         data = response.data
         if not data:
             raise ValueError("Failed to update view group")
+        assert len(data) == 1, "Unexpected error: more than one view group updated"
         return ViewGroup(**data[0])
     except Exception as e:
         raise e
