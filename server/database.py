@@ -1,12 +1,64 @@
+import os
 import random
 import string
+import sys
 from datetime import datetime
 from typing import Dict, List, Optional, Set, Union
 
-from server.data_model import MachineStatus, ViewGroup
+from rich import print
+from supabase import Client
+
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from server.auth import init_supabase, sign_myself_in, sign_out
+from server.data_model import MachineStatus, ReportKey, ViewGroup
 
 ###############################################################################
 ### Databse Definition and Initialization
+
+"""
+Table 1: User Table (Auth)
+
+user_id: str
+
+Table 2: Report Keys
+
+    id: str # primary key
+    created_at: datetime
+    user_id: str # foreign key
+    report_key: str
+    report_key_desc: str
+
+
+Table 3: View Groups
+
+    id: str # primary key
+    created_at: datetime
+    user_id: str # foreign key
+    view_key: str # Required, unique
+    view_name: str # Required, used as display title, not unique
+    view_desc: str # Optional, used as display description
+    view_enabled: bool # Required, default True
+    view_machines: List[str] # Required, list of machine_id, can be empty
+    view_timer: Optional[datetime] # Optional, used for disabling view after a certain time
+
+policies:
+
+    - select: user can view their own view groups
+              anyone can view a specific view group given the view_key
+    - insert: user can create their own view groups
+    - update: user can update their own view groups
+    - delete: user can delete their own view groups
+
+
+Table 4: Machine Status
+
+id: str # primary key
+machine_id: str
+report_key: str
+status: json
+
+
+"""
 
 
 class Database:
@@ -234,6 +286,36 @@ def create_new_report_key(
     }
 
 
+def create_new_report_key_supabase(
+    supabase: Client,
+    user_id: str,
+    report_key: Optional[str] = "",
+    report_key_desc: Optional[str] = "",
+) -> ReportKey:
+    try:
+        new_key_payload = dict(
+            user_id=user_id,
+            report_key=report_key if report_key else random_report_key(),
+            report_key_desc=report_key_desc,
+        )
+        response = supabase.table("report_keys").insert(new_key_payload).execute()
+        data = response.data[0]
+        return ReportKey(**data)
+    except Exception as e:
+        raise e
+
+
+def get_user_report_keys_supabase(supabase: Client) -> List[ReportKey]:
+    try:
+        response = supabase.table("report_keys").select("*").execute()
+        data = response.data
+        print(f"Current user has {len(data)} report keys")
+        return [ReportKey(**x) for x in data]
+
+    except Exception as e:
+        raise e
+
+
 def delete_report_key(user_id: str, report_key: str) -> None:
     # check user_id is valid
     if not valid_user_id(user_id):
@@ -318,6 +400,28 @@ def create_new_view_group(
     return view_group
 
 
+def create_new_view_group_supabase(
+    supabase: Client,
+    user_id: str,
+    view_group: ViewGroup,
+) -> ViewGroup:
+    try:
+        new_group_payload = dict(
+            user_id=user_id,
+            view_key=view_group.view_key if view_group.view_key else random_view_key(),
+            view_name=view_group.view_name,
+            view_desc=view_group.view_desc,
+            view_enabled=view_group.view_enabled,
+            view_machines=view_group.view_machines,
+            view_timer=view_group.view_timer,
+        )
+        response = supabase.table("view_groups").insert(new_group_payload).execute()
+        data = response.data[0]
+        return ViewGroup(**data)
+    except Exception as e:
+        raise e
+
+
 def check_view_group(view_key: str) -> ViewGroup:
     """
     Return the view_group object if view_key exists
@@ -332,6 +436,28 @@ def check_view_group(view_key: str) -> ViewGroup:
         KeyError: view_key does not exist
     """
     return DB.ALL_VIEW_KEYS[view_key]
+
+
+def check_view_group_supabase(supabase: Client, view_key: str) -> ViewGroup:
+    try:
+        response = (
+            supabase.table("view_groups").select("*").eq("view_key", view_key).execute()
+        )
+        data = response.data[0]
+        return ViewGroup(**data)
+    except Exception as e:
+        raise e
+
+
+def get_user_view_groups_supabase(supabase: Client, user_id: str) -> List[ViewGroup]:
+    try:
+        response = (
+            supabase.table("view_groups").select("*").eq("user_id", user_id).execute()
+        )
+        data = response.data
+        return [ViewGroup(**x) for x in data]
+    except Exception as e:
+        raise e
 
 
 def update_machines_in_view(
@@ -375,6 +501,44 @@ def update_machines_in_view(
         DB.ALL_VIEW_KEYS[view_key]["view_machines"] = update
 
     return DB.ALL_VIEW_KEYS[view_key]
+
+
+def update_machines_in_view_supabase(
+    supabase: Client,
+    user_id: str,
+    view_key: str,
+    add: List[str] = [],
+    remove: List[str] = [],
+    overwrite: List[str] = [],
+) -> ViewGroup:
+    try:
+        view_group: ViewGroup = check_view_group_supabase(supabase, view_key)
+        view_machines = view_group.view_machines or []
+
+        if not overwrite:
+            # add machines
+            for machine_id in add:
+                if machine_id not in view_machines:
+                    view_machines.append(machine_id)
+            # remove machines
+            for machine_id in remove:
+                if machine_id in view_machines:
+                    view_machines.remove(machine_id)
+        else:
+            view_machines = overwrite
+
+        response = (
+            supabase.table("view_groups")
+            .update({"view_machines": view_machines})
+            .eq("view_key", view_key)
+            .execute()
+        )
+        data = response.data
+        if not data:
+            raise ValueError("Failed to update view group")
+        return ViewGroup(**data[0])
+    except Exception as e:
+        raise e
 
 
 if __name__ == "__main__":
