@@ -62,6 +62,17 @@ if __name__ == "__main__":
         print(f"returned view_group:")
         print(view_group)
 
+        print("=" * 80)
+        _report_key = "RANDOM"
+        _dummy_status = MachineStatus.dummy()
+        _dummy_status.report_key = _report_key
+        _dummy_status.machine_id = "machine_" + "".join(
+            random.choices(string.ascii_letters + string.digits, k=8)
+        )
+
+        # test add machine status
+        db.store_new_report_supabase(supabase=supabase, status=_dummy_status)
+
     except Exception as e:
         raise e
     finally:

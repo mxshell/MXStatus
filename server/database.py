@@ -2,6 +2,7 @@ import os
 import random
 import string
 import sys
+from collections import deque
 from datetime import datetime
 from typing import Dict, List, Optional, Set, Union
 
@@ -9,6 +10,8 @@ from rich import print
 from supabase import Client
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+import postgrest.exceptions as pg_exceptions
+
 from server.auth import init_supabase, sign_myself_in, sign_out
 from server.data_model import MachineStatus, ReportKey, ViewGroup
 
@@ -28,7 +31,7 @@ Table 2: Report Keys
     user_id: str # foreign key
     report_key: str # Required, UNIQUE
     report_key_desc: str # Optional, used as display description
-    [TODO] enabled: bool # default True
+    enabled: bool # default True
 
 policies:
     
@@ -96,15 +99,95 @@ Table 5: Machine Status History [TODO]
 """
 
 
-class Database:
-    def __init__(self):
-        self.STATUS_DATA: Dict[str, MachineStatus] = {
-            # machine_id: MachineStatus object
-            # TODO: future work: use a FIFO fixed size queue to store the last N reports
+class StatusMemory:
+    def __init__(self, max_length: int = 100):
+        self.max_length = max_length
+        self.data: Dict[str, deque[MachineStatus]] = {
+            # {machine_id: deque[MachineStatus]}
         }
 
+    def init_machine_id(self, machine_id: str) -> bool:
+        if machine_id not in self.data:
+            print(f"[INFO] New machine_id ({machine_id}) first time reporting.")
+            self.data[machine_id] = deque(maxlen=self.max_length)
+            return True
+        return False
 
-DB = Database()
+    def add_status(self, status: MachineStatus):
+        first_time = self.init_machine_id(status.machine_id)
+        if not first_time:
+            _prev_status = self.get_last_status(status.machine_id)
+            _prev_report_key = _prev_status.report_key
+            if status.report_key != _prev_report_key:
+                print(
+                    f"[WARNING] Machine ({status.machine_id}) changed report_key from ({_prev_report_key}) to ({status.report_key})"
+                )
+        self.data[status.machine_id].append(status)
+
+    def remove_machine_id(self, machine_id: str):
+        if machine_id in self.data:
+            del self.data[machine_id]
+
+    def get_last_status(self, machine_id: str) -> Union[MachineStatus, None]:
+        if machine_id in self.data:
+            if self.data[machine_id]:
+                return self.data[machine_id][-1]
+        return None
+
+    def get_status(self, machine_id: str) -> Union[MachineStatus, None]:
+        return self.get_last_status(machine_id)
+
+    def get_last_status_batch(self, machine_ids: List[str]) -> Dict[str, MachineStatus]:
+        return {
+            machine_id: self.get_last_status(machine_id) for machine_id in machine_ids
+        }
+
+    def get_status_batch(self, machine_ids: List[str]) -> Dict[str, MachineStatus]:
+        return self.get_last_status_batch(machine_ids)
+
+
+SM = StatusMemory()
+
+
+class ReportKeyCache:
+    def __init__(self, supabase: Client = None, cool_down: int = 5):
+        """
+        [Server-side] require admin authenticated supabase client
+        """
+        self.supabase: Optional[Client] = supabase
+        self.cool_down: int = cool_down  # seconds
+        if not self.supabase:
+            print("[WARNING] Supabase client is not set")
+
+        # init cache variables
+        self.data: Dict[str, ReportKey] = {}
+        self.last_updated: datetime = datetime.fromisoformat("1970-01-01T00:00:00")
+
+        # init cache
+        self.refresh(supabase)
+
+    def get_key(self, report_key: str) -> Union[ReportKey, None]:
+        self.refresh()
+        return self.data.get(report_key)
+
+    def refresh(self):
+        if self._is_expired():
+            self._fetch_all()
+
+    def _is_expired(self) -> bool:
+        return (datetime.now() - self.last_updated).seconds > self.cool_down
+
+    def _fetch_all(self):
+        if not self.supabase:
+            raise ValueError("Supabase client is not set")
+
+        response = self.supabase.table("report_keys").select("*").execute()
+        data = response.data
+        self.data = {x["report_key"]: ReportKey(**x) for x in data}
+        self.last_updated = datetime.now()
+
+
+RKC = ReportKeyCache()
 
 ###############################################################################
 ### User
@@ -122,80 +205,31 @@ def random_key_gen(length: int = 8, digits: bool = True) -> str:
 ### report_status
 
 
-def store_new_report(status: MachineStatus) -> None:
-    # check report_key is valid
-    # report_key has to be pre-existing
-    if status.report_key not in DB.ALL_REPORT_KEYS:
-        raise ValueError("Invalid report_key")
+def store_new_report_supabase(supabase: Client, status: MachineStatus) -> None:
+    """
+    [Server-side] Store new report status to the StatusMemory
+    """
+    try:
+        # check if report_key is valid
+        report_key = RKC.get_key(status.report_key)
+        if not report_key:
+            raise ValueError("Invalid report_key")
+        elif not report_key.enabled:
+            raise ValueError("Report key is disabled")
 
-    # check machine_id is not empty
-    if not status.machine_id:
-        raise ValueError("Invalid machine_id")
+        # check machine_id is not empty
+        if not status.machine_id:
+            raise ValueError("Invalid machine_id")
 
-    # check first time reporting
-    if status.machine_id not in DB.ALL_REPORT_KEYS[status.report_key]:
-        # new machine_id reporting to this report_key
-        DB.ALL_REPORT_KEYS[status.report_key].add(status.machine_id)
-        print(
-            f"New machine_id ({status.machine_id}) reporting using report_key ({status.report_key})"
-        )
+        # add status to memory
+        SM.add_status(status)
 
-    # store update
-    DB.STATUS_DATA[status.machine_id] = status.model_dump()
-
-    return
+    except Exception as e:
+        raise e
 
 
 ###############################################################################
 ### view_status
-
-
-def get_view(view_key: str) -> Dict[str, Dict[str, MachineStatus]]:
-    # check view_key is valid
-    if view_key not in DB.ALL_VIEW_KEYS:
-        raise ValueError("Invalid view_key.")
-    # TODO: check access permission and stuff...
-    ...
-    # get view_group object
-    view_group = DB.ALL_VIEW_KEYS[view_key]
-    # TODO: maybe check timer here?
-    ...
-    # check if view is enabled
-    view_enabled = view_group.get("view_enabled", False)
-    if not view_enabled:
-        raise ValueError("View is unavailable.")
-    # get machine_id set
-    machine_ids = view_group.get("view_machines", [])
-    # get status data
-    status_data = []
-    for machine_id in machine_ids:
-        if machine_id in DB.STATUS_DATA:
-            status_data.append(DB.STATUS_DATA[machine_id])
-    return status_data
-
-
-def get_view_machine(view_key: str, machine_id: str) -> Union[MachineStatus, None]:
-    # check view_key is valid
-    if view_key not in DB.ALL_VIEW_KEYS:
-        return None
-    # check machine_id is valid
-    if machine_id not in DB.STATUS_DATA:
-        return None
-    # check access permission and stuff...
-    ...
-    # get view_group object
-    view_group = DB.ALL_VIEW_KEYS[view_key]
-    # check if view is enabled
-    view_enabled = view_group.get("view_enabled", False)
-    if not view_enabled:
-        return None
-    # get machine_id set
-    machine_ids = view_group.get("view_machines", [])
-    # check if machine_id is in view
-    if machine_id not in machine_ids:
-        return None
-    # get status data
-    return DB.STATUS_DATA[machine_id]
 
 
 ###############################################################################
@@ -241,31 +275,8 @@ def random_report_key() -> str:
             return code
 
 
-# def create_new_report_key(
-#     user_id: str,
-#     report_key: Optional[str] = "",
-#     report_key_desc: Optional[str] = "",
-# ):
-#     # check user_id is valid
-#     # if not valid_user_id(user_id):
-#     #     raise ValueError(f"Invalid user_id: {user_id}")
-#     # generate a new report_key if not provided
-#     if not report_key:
-#         report_key = random_report_key()
-#     # check report_key is valid
-#     if not valid_new_report_key(report_key):
-#         raise ValueError(
-#             "Invalid report_key: report_key is already in use or does not meet requirements"
-#         )
-#     # add report_key to DB
-#     DB.ALL_REPORT_KEYS[report_key] = set()
-#     # add to user report_key_desc map
-#     DB.USER_REPORT_KEYS[user_id][report_key] = report_key_desc
-
-#     return {
-#         "report_key": report_key,
-#         "report_key_desc": report_key_desc,
-#     }
+###############################################################################
+### report_key CRUD
 
 
 def create_new_report_key_supabase(
@@ -273,12 +284,17 @@ def create_new_report_key_supabase(
     user_id: str,
     report_key: Optional[str] = "",
     report_key_desc: Optional[str] = "",
+    enabled: Optional[bool] = True,
 ) -> ReportKey:
+    """
+    user-facing function: require user authenticated supabase client
+    """
     try:
         new_key_payload = dict(
             user_id=user_id,
             report_key=report_key if report_key else random_report_key(),
             report_key_desc=report_key_desc,
+            enabled=enabled,
         )
         response = supabase.table("report_keys").insert(new_key_payload).execute()
         data = response.data[0]
@@ -288,6 +304,9 @@ def create_new_report_key_supabase(
 
 
 def get_user_report_keys_supabase(supabase: Client) -> List[ReportKey]:
+    """
+    user-facing function: require user authenticated supabase client
+    """
     try:
         response = supabase.table("report_keys").select("*").execute()
         data = response.data
@@ -298,26 +317,43 @@ def get_user_report_keys_supabase(supabase: Client) -> List[ReportKey]:
         raise e
 
 
-# def delete_report_key(user_id: str, report_key: str) -> None:
-#     # check user_id is valid
-#     # if not valid_user_id(user_id):
-#     #     raise ValueError(f"Invalid user_id: {user_id}")
-#     # check report_key exists
-#     if report_key not in DB.USER_REPORT_KEYS[user_id]:
-#         raise ValueError("report_key does not exist")  # TODO: maybe refine this
-#     # remove from user report_key list
-#     del DB.USER_REPORT_KEYS[user_id][report_key]
-#     # remove from report_key list
-#     if report_key in DB.ALL_REPORT_KEYS:
-#         del DB.ALL_REPORT_KEYS[report_key]
-#     else:
-#         print(
-#             "Unexpected Error: report_key exists in user list but not in all list, code logic might be wrong"
-#         )
-#     return
+def update_report_key_supabase(
+    supabase: Client,
+    report_key: str,
+    report_key_desc: Optional[str] = None,
+    enabled: Optional[bool] = None,
+) -> ReportKey:
+    """
+    user-facing function: require user authenticated supabase client
+    """
+    try:
+        update_payload = dict()
+        if isinstance(report_key_desc, str):
+            update_payload["report_key_desc"] = report_key_desc
+        if isinstance(enabled, bool):
+            update_payload["enabled"] = enabled
+        if not update_payload:
+            raise ValueError("Nothing to update")
+
+        response = (
+            supabase.table("report_keys")
+            .update(update_payload)
+            .eq("report_key", report_key)
+            .execute()
+        )
+        data = response.data
+        if not data:
+            raise ValueError("Failed to update report key")
+        assert len(data) == 1, "Unexpected error: more than one report key updated"
+        return ReportKey(**data[0])
+    except Exception as e:
+        raise e
 
 
 def delete_report_key_supabase(supabase: Client, report_key: str) -> None:
+    """
+    user-facing function: require user authenticated supabase client
+    """
     try:
         response = (
             supabase.table("report_keys")
