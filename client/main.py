@@ -396,6 +396,15 @@ def get_sys_usage() -> Dict[str, float]:
 ## Users
 
 
+def _get_sudo_users() -> List[str]:
+    """
+    Get a list of users who have sudo privileges.
+    """
+    cmd = "awk -F: '/^sudo/ {print $4}' /etc/group"
+    success, output = run_command(cmd)
+    return list(set(output.split(","))) if success else []
+
+
 def _get_online_users() -> List[str]:
     """
     Get a list of users who are currently logged in.
@@ -480,6 +489,14 @@ def get_users_info() -> Dict[str, List[str]]:
     """
     online_users = _get_online_users()
     all_users = _get_all_users()
+    sudo_users = _get_sudo_users()
+
+    # SECURITY: protect the sudo users from being exposed
+    for _sudo_user in sudo_users:
+        if _sudo_user in all_users:
+            all_users.remove(_sudo_user)
+        if _sudo_user in online_users:
+            online_users.remove(_sudo_user)
 
     # make a shallow copy of all_users
     offline_users = all_users[:]
