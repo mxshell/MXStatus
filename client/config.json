@@ -2,5 +2,8 @@
     "server_address": "api.mxshell.dev",
     "report_key": "dev@markhh.com",
     "report_interval": 10,
-    "logger_level": "info"
+    "logger_level": "info",
+    "display_name": "",
+    "display_note": "",
+    "display_warning": ""
 }

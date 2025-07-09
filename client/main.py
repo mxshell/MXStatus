@@ -625,11 +625,17 @@ def get_status() -> MachineStatus:
     sys_info = get_sys_info()
     sys_usage = get_sys_usage()
 
+    display_name = str(configs.get("display_name", "")).strip()
+    display_note = str(configs.get("display_note", "")).strip()
+    display_warning = str(configs.get("display_warning", "")).strip()
+
     status: MachineStatus = MachineStatus()
     # Custom Machine Name
-    status.name = ip.get("hostname", "")
+    status.name = display_name if display_name else ip.get("hostname", "")
     status.machine_id = MACHINE_ID
     status.report_key = REPORT_KEY
+    status.display_note = display_note
+    status.display_warning = display_warning
     # Networks
     status.hostname = ip.get("hostname", "")
     status.local_ip = ip.get("local_ip", "")
