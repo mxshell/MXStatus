@@ -634,8 +634,11 @@ def get_status() -> MachineStatus:
     status.name = display_name if display_name else ip.get("hostname", "")
     status.machine_id = MACHINE_ID
     status.report_key = REPORT_KEY
-    status.display_note = display_note
-    status.display_warning = display_warning
+
+    # TODO FIXME: need to update the data model to support display_note and display_warning
+    # consider to use a flexible payload dictionary to store flexible fields
+    # status.display_note = display_note
+    # status.display_warning = display_warning
     # Networks
     status.hostname = ip.get("hostname", "")
     status.local_ip = ip.get("local_ip", "")
