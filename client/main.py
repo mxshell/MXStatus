@@ -11,7 +11,7 @@ import uuid
 from logging import DEBUG, INFO
 from pathlib import Path
 from time import sleep
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import psutil
 import requests
@@ -341,6 +341,95 @@ def get_sys_info() -> Dict[str, str]:
         logger.error(e)
         info["error"] = str(e)
     return info
+
+
+###############################################################################
+## Disk / Storage
+
+
+def _convert_size_str_to_GiB(size_str: str) -> float:
+    """
+    Convert the human readable storage size string to a float number in Gigabytes (GiB).
+    """
+    size_str = size_str.strip()
+    if size_str.endswith("T"):
+        return float(size_str.strip("T")) * 1024
+    elif size_str.endswith("G"):
+        return float(size_str.strip("G"))
+    elif size_str.endswith("M"):
+        return float(size_str.strip("M")) / 1024
+    elif size_str.endswith("K"):
+        return float(size_str.strip("K")) / 1024 / 1024
+    else:
+        return -1
+
+
+def get_disk_info() -> List[Dict[str, Any]]:
+    """
+    Get the disk information by using
+    df -h -x tmpfs -x squashfs -x devtmpfs -x vfat -x efivarfs
+    and parse the output.
+
+    Example output from the command:
+    ➜ df -x tmpfs -x squashfs -x devtmpfs -x vfat -hT
+    Filesystem     Type  Size  Used Avail Use% Mounted on
+    /dev/nvme1n1p3 ext4  3.2T  2.6T  475G  85% /
+    /dev/nvme1n1p2 ext4   20G  212M   19G   2% /boot
+    /dev/nvme1n1p4 ext4   98G   11M   93G   1% /tmp
+    /dev/nvme1n1p6 ext4   32G  3.5G   27G  12% /var/log
+    /dev/nvme1n1p5 ext4   49G  6.7M   47G   1% /var/tmp
+    /dev/nvme0n1p1 ext4  3.5T  3.2T  151G  96% /home
+    /dev/nvme1n1p7 ext4   46G  9.6G   34G  23% /var/log/audit
+    /dev/sda1      ext4   33T   17T   15T  53% /mnt/data
+
+    Returned dictionary should be like:
+    {
+        "filesystem": "/dev/nvme1n1p3",
+        "type": "ext4",
+        "size_str": "3.2T",
+        "size": _convert_size_str_to_GiB("3.2T"),
+        "used_str": "2.6T",
+        "used": _convert_size_str_to_GiB("2.6T"),
+        "avail_str": "475G",
+        "avail": _convert_size_str_to_GiB("475G"),
+        "usage_str": "85%",
+        "usage": 0.85, # range: [0, 1]
+        "mounted_on": "/",
+    }
+
+    TODO: not yet tested.
+    """
+    disk_info: List[Dict[str, Any]] = []
+    cmd = "df -x tmpfs -x squashfs -x devtmpfs -x vfat -hT"
+    success, output = run_command(cmd)
+    if not success:
+        return []
+    lines = output.split("\n")
+    if len(lines) <= 1:
+        return []
+    for line in lines[1:]:
+        line = line.strip()
+        if not line:
+            continue
+        fields = line.split()
+        if len(fields) != 7:
+            continue
+        disk_info.append(
+            dict(
+                filesystem=fields[0],
+                type=fields[1],
+                size_str=fields[2],
+                size=_convert_size_str_to_GiB(fields[2]),
+                used_str=fields[3],
+                used=_convert_size_str_to_GiB(fields[3]),
+                avail_str=fields[4],
+                avail=_convert_size_str_to_GiB(fields[4]),
+                usage_str=fields[5],
+                usage=float(fields[5].strip("% ")) / 100,  # range: [0, 1]
+                mounted_on=fields[6],
+            )
+        )
+    return disk_info
 
 
 ###############################################################################
