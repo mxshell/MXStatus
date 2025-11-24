@@ -819,7 +819,7 @@ def main(debug_mode: bool = False) -> None:
         try:
             ###################################################################
             # Check if the machine is connected to the internet
-            if not is_connected():
+            if not google_is_reachable():
                 logger.warning("Not Connected to Internet.")
                 # Additive recovery delay
                 recovery_delay += 5
