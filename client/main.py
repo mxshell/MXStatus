@@ -371,7 +371,7 @@ def get_disk_info() -> List[Dict[str, Any]]:
     and parse the output.
 
     Example output from the command:
-    ➜ df -x tmpfs -x squashfs -x devtmpfs -x vfat -hT
+    ➜ df -x tmpfs -x squashfs -x devtmpfs -x vfat -x efivarfs -hT
     Filesystem     Type  Size  Used Avail Use% Mounted on
     /dev/nvme1n1p3 ext4  3.2T  2.6T  475G  85% /
     /dev/nvme1n1p2 ext4   20G  212M   19G   2% /boot
@@ -397,38 +397,92 @@ def get_disk_info() -> List[Dict[str, Any]]:
         "mounted_on": "/",
     }
 
-    TODO: not yet tested.
+    Returns:
+        List[Dict[str, Any]]: List of disk information dictionaries.
+                             Returns empty list on error or if no disks found.
+                             Malformed lines are skipped with debug logging.
     """
     disk_info: List[Dict[str, Any]] = []
-    cmd = "df -x tmpfs -x squashfs -x devtmpfs -x vfat -hT"
+    cmd = "df -x tmpfs -x squashfs -x devtmpfs -x vfat -x efivarfs -hT"
     success, output = run_command(cmd)
     if not success:
+        logger.warning(f"Failed to execute df command: {output}")
         return []
+
     lines = output.split("\n")
     if len(lines) <= 1:
+        logger.warning("df command returned no data lines")
         return []
+
     for line in lines[1:]:
         line = line.strip()
         if not line:
             continue
+
+        # Handle mount points with spaces by splitting carefully
+        # df -hT output format: filesystem type size used avail use% mounted_on
+        # The first 6 fields are fixed, but mounted_on can contain spaces
         fields = line.split()
-        if len(fields) != 7:
-            continue
-        disk_info.append(
-            dict(
-                filesystem=fields[0],
-                type=fields[1],
-                size_str=fields[2],
-                size=_convert_size_str_to_GiB(fields[2]),
-                used_str=fields[3],
-                used=_convert_size_str_to_GiB(fields[3]),
-                avail_str=fields[4],
-                avail=_convert_size_str_to_GiB(fields[4]),
-                usage_str=fields[5],
-                usage=float(fields[5].strip("% ")) / 100,  # range: [0, 1]
-                mounted_on=fields[6],
+        if len(fields) < 7:
+            logger.debug(
+                f"Skipping malformed line (expected 7+ fields, got {len(fields)}): {line}"
             )
-        )
+            continue
+
+        try:
+            filesystem = fields[0]
+            fs_type = fields[1]
+            size_str = fields[2]
+            used_str = fields[3]
+            avail_str = fields[4]
+            usage_str = fields[5]
+            # Mount point is everything after the 6th field (handles spaces)
+            mounted_on = " ".join(fields[6:])
+
+            # Convert size strings to GiB
+            size = _convert_size_str_to_GiB(size_str)
+            used = _convert_size_str_to_GiB(used_str)
+            avail = _convert_size_str_to_GiB(avail_str)
+
+            # Validate conversions
+            if size < 0 or used < 0 or avail < 0:
+                logger.debug(f"Skipping disk with invalid size conversion: {line}")
+                continue
+
+            # Parse usage percentage
+            usage_str_clean = usage_str.strip("% ")
+            try:
+                usage = float(usage_str_clean) / 100.0
+                # Clamp usage to [0, 1] range
+                usage = max(0.0, min(1.0, usage))
+            except (ValueError, TypeError) as e:
+                logger.debug(
+                    f"Skipping disk with invalid usage percentage '{usage_str}': {line}"
+                )
+                continue
+
+            disk_info.append(
+                dict(
+                    filesystem=filesystem,
+                    type=fs_type,
+                    size_str=size_str,
+                    size=size,
+                    used_str=used_str,
+                    used=used,
+                    avail_str=avail_str,
+                    avail=avail,
+                    usage_str=usage_str,
+                    usage=usage,
+                    mounted_on=mounted_on,
+                )
+            )
+        except (ValueError, IndexError, TypeError) as e:
+            logger.debug(f"Error parsing disk info line '{line}': {e}")
+            continue
+        except Exception as e:
+            logger.warning(f"Unexpected error parsing disk info line '{line}': {e}")
+            continue
+
     return disk_info
 
 
@@ -730,6 +784,7 @@ def get_status() -> MachineStatus:
     ip = get_ip()
     sys_info = get_sys_info()
     sys_usage = get_sys_usage()
+    disk_info = get_disk_info()
 
     display_name = str(configs.get("display_name", "")).strip()
     display_note = str(configs.get("display_note", "")).strip()
@@ -769,6 +824,8 @@ def get_status() -> MachineStatus:
     status.ram_free = sys_usage.get("ram_free", "")
     status.ram_total = sys_usage.get("ram_total", "")
     status.ram_usage = sys_usage.get("ram_usage", "")
+    # Disk
+    status.disk_info = disk_info
     # GPU
     if _nvidia_exist():
         status.gpu_status = get_gpu_status()

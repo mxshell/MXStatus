@@ -6,6 +6,20 @@ from pydantic import BaseModel, validator
 from helpers import mask_sensitive_string
 
 
+class DiskInfo(BaseModel):
+    filesystem: str = None
+    type: str = None
+    size_str: str = None
+    size: float = None  # GiB
+    used_str: str = None
+    used: float = None  # GiB
+    avail_str: str = None
+    avail: float = None  # GiB
+    usage_str: str = None
+    usage: float = None  # range: [0, 1]
+    mounted_on: str = None
+
+
 class GPUStatus(BaseModel):
     index: int = None
     gpu_name: str = None
@@ -62,6 +76,8 @@ class MachineStatus(BaseModel):
     ram_total: float = None  # MiB
     ram_unit: str = "MiB"
     ram_usage: float = None  # range: [0, 1]
+    # disk info
+    disk_info: List[DiskInfo] = None
     # gpu usage
     gpu_status: List[GPUStatus] = None
     gpu_compute_processes: List[GPUComputeProcess] = None
