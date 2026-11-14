@@ -24,9 +24,14 @@ def mask_sensitive_string(value: str) -> str:
 def _run(cmd):
     try:
         return subprocess.run(
-            cmd, shell=True, capture_output=True, check=True, encoding="utf-8"
+            cmd,
+            shell=True,
+            capture_output=True,
+            check=True,
+            encoding="utf-8",
+            timeout=10,
         ).stdout.strip()
-    except:
+    except (OSError, subprocess.SubprocessError, UnicodeError):
         return None
 
 
@@ -40,7 +45,9 @@ def guid():
         )
 
     if sys.platform == "win32" or sys.platform == "cygwin" or sys.platform == "msys":
-        return _run("wmic csproduct get uuid").split("\n")[2].strip()
+        output = _run("wmic csproduct get uuid")
+        lines = [line.strip() for line in (output or "").splitlines() if line.strip()]
+        return lines[1] if len(lines) > 1 else None
 
     if sys.platform.startswith("linux"):
         return _run("cat /var/lib/dbus/machine-id") or _run("cat /etc/machine-id")

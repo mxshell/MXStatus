@@ -30,13 +30,18 @@ We use Docker for easy server deployment. Follow these steps to get your server 
 
 2. Clone this repository; Navigate to the project root directory.
 
-3. Run the following command to deploy the server:
+3. Configure a private `.env` file as described in the [server setup](server/README.md).
+   Set `MXSTATUS_ADMIN_TOKEN` and optionally bootstrap report/view keys and machine IDs.
+   The published development credentials are no longer accepted. Put public deployments
+   behind an HTTPS reverse proxy.
+
+4. Run the following command to deploy the server:
 
     ```bash
     docker compose up --build -d
     ```
 
-4. To tear down the server and remove the Docker image, run:
+5. To tear down the server and remove the Docker image, run:
 
     ```bash
     docker compose down --rmi all
@@ -54,10 +59,12 @@ This section is for developers who want to contribute to the development of _MXS
 
 To set up the development environment:
 
+Use Python 3.12 or newer. With [uv](https://docs.astral.sh/uv/), run `uv sync` to install the locked runtime and development dependencies. Alternatively:
+
 1. Create a virtual environment:
 
     ```bash
-    python3 -m venv venv
+    python3.12 -m venv venv
     source venv/bin/activate
     ```
 
@@ -69,10 +76,10 @@ To set up the development environment:
 
 ### Run Development Server
 
-To run the development server, use the following command from the project root directory:
+Export the [server configuration](server/README.md#configure-access), then run from the project root directory:
 
 ```bash
-uvicorn server.main:app --reload --port 5000
+uv run uvicorn server.main:app --reload --port 5000 --no-access-log
 ```
 
 ### Run Client
@@ -91,4 +98,19 @@ For testing the Client component:
     python3 main.py
     ```
 
-Feel free to explore and contribute to the development of _MXStatus_!
+### Checks
+
+```bash
+uv run pytest
+uv run ruff check server client tests
+uv run ruff format --check server client tests
+```
+
+After changing dependencies, regenerate the Docker/pip requirements from the lockfile:
+
+```bash
+uv export --no-dev --no-emit-project --no-hashes --output-file requirements.txt
+```
+
+The server currently stores state in memory. Run one worker only; API-created
+keys and views do not survive restarts. See [server limitations and bootstrap configuration](server/README.md).

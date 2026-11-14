@@ -1,21 +1,16 @@
-version: "3.4"
-
 services:
     api:
         build:
             context: .
-            network: host
             dockerfile: Dockerfile
         container_name: status-server
         restart: unless-stopped
         ports:
-            - 5000:5000
+            - "5000:5000"
         environment:
-            TZ: "Asia/Singapore"
-            PORT: "5000"
-            MODULE_NAME: "server.main"
-            LOG_LEVEL: "debug"
-            # Gunicorn workers
-            MAX_WORKERS: "1" # stick to 1 worker until setting up multiprocessing for in-memory cache
-        volumes:
-            - "./logs:/app/logs"
+            MXSTATUS_ADMIN_TOKEN: "${MXSTATUS_ADMIN_TOKEN:?Set a random admin token of at least 32 characters}"
+            MXSTATUS_ADMIN_USER_ID: "${MXSTATUS_ADMIN_USER_ID:-1000}"
+            MXSTATUS_REPORT_KEY: "${MXSTATUS_REPORT_KEY:-}"
+            MXSTATUS_VIEW_KEY: "${MXSTATUS_VIEW_KEY:-}"
+            MXSTATUS_MACHINE_IDS: "${MXSTATUS_MACHINE_IDS:-}"
+            MXSTATUS_CORS_ORIGINS: "${MXSTATUS_CORS_ORIGINS:-}"

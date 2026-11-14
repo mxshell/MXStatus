@@ -1,12 +1,16 @@
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Union
+from datetime import datetime, timezone
+from typing import List, Union
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .helpers import mask_sensitive_string
 
 
-class DiskInfo(BaseModel):
+class StatusModel(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
+
+
+class DiskInfo(StatusModel):
     filesystem: Union[str, None] = None
     type: Union[str, None] = None
     size_str: Union[str, None] = None
@@ -20,7 +24,7 @@ class DiskInfo(BaseModel):
     mounted_on: Union[str, None] = None
 
 
-class GPUStatus(BaseModel):
+class GPUStatus(StatusModel):
     index: Union[int, None] = None
     gpu_name: Union[str, None] = None
     gpu_usage: Union[float, None] = None  # range: [0, 1]
@@ -30,7 +34,7 @@ class GPUStatus(BaseModel):
     memory_usage: Union[float, None] = None  # range: [0, 1]
 
 
-class GPUComputeProcess(BaseModel):
+class GPUComputeProcess(StatusModel):
     pid: Union[int, None] = None
     user: Union[str, None] = None
     gpu_uuid: Union[str, None] = None
@@ -46,17 +50,19 @@ class GPUComputeProcess(BaseModel):
     command: Union[str, None] = None
 
 
-class MachineStatus(BaseModel):
+class MachineStatus(StatusModel):
     created_at: Union[datetime, None] = None
     name: Union[str, None] = None
-    machine_id: Union[str, None] = None
-    report_key: Union[str, None] = None
+    machine_id: Union[str, None] = Field(default=None, max_length=256)
+    report_key: Union[str, None] = Field(
+        default=None, exclude=True, repr=False, max_length=64
+    )
     # ip
     hostname: Union[str, None] = None
     local_ip: Union[str, None] = None
     public_ip: Union[str, None] = None
-    ipv4s: Union[list, None] = None
-    ipv6s: Union[list, None] = None
+    ipv4s: Union[list[tuple[str, str]], None] = None
+    ipv6s: Union[list[tuple[str, str]], None] = None
     # sys info
     architecture: Union[str, None] = None
     mac_address: Union[str, None] = None
@@ -81,21 +87,21 @@ class MachineStatus(BaseModel):
     # gpu usage
     gpu_status: Union[List[GPUStatus], None] = None
     gpu_compute_processes: Union[List[GPUComputeProcess], None] = None
-    # users info
-    users_info: Union[dict, None] = None
+    # Validate the collection before masking, without mutating the input mapping.
+    users_info: dict[str, list[str]] = Field(default_factory=dict)
 
-    @validator("created_at", pre=True, always=True)
-    def default_created_at(cls, v):
-        return v or datetime.now()
+    @field_validator("users_info", mode="before")
+    @classmethod
+    def default_users_info(cls, value):
+        return {} if value is None else value
 
-    @validator("users_info", pre=True, always=True)
-    def process_users_info(cls, v):
-        if isinstance(v, dict):
-            for keys in v.keys():
-                v[keys] = [mask_sensitive_string(user) for user in v[keys]]
-            return v
-        else:
-            return {}
+    @field_validator("users_info")
+    @classmethod
+    def process_users_info(cls, value):
+        return {
+            key: [mask_sensitive_string(user) for user in users]
+            for key, users in value.items()
+        }
 
     def __repr__(self) -> str:
         return self.model_dump_json()
@@ -113,8 +119,25 @@ class ViewGroup(BaseModel):
     view_name: Union[str, None] = None
     view_desc: Union[str, None] = None
     view_enabled: bool = True
-    view_machines: Union[List[str], None] = None
+    view_machines: List[str] = Field(default_factory=list)
     view_timer: Union[datetime, None] = None
+
+    @field_validator("view_machines", mode="before")
+    @classmethod
+    def default_view_machines(cls, value):
+        return [] if value is None else value
+
+    @field_validator("view_timer")
+    @classmethod
+    def normalize_timer(cls, value):
+        if value is not None:
+            # Legacy timestamps without an offset are interpreted as UTC.
+            return (
+                value.replace(tzinfo=timezone.utc)
+                if value.tzinfo is None
+                else value.astimezone(timezone.utc)
+            )
+        return value
 
     def __repr__(self) -> str:
         return self.model_dump_json()

@@ -1,5 +1,9 @@
+import csv
 import datetime
+import ipaddress
 import json
+import math
+import os
 import platform
 import re
 import shlex
@@ -12,13 +16,18 @@ from logging import DEBUG, INFO
 from pathlib import Path
 from time import sleep
 from typing import Any, Dict, List, Tuple
+from urllib.parse import urlsplit
 
 import psutil
 import requests
 from puts import get_logger
 
-from data_model import GPUComputeProcess, GPUStatus, MachineStatus
-from helpers import guid
+if __package__:
+    from .data_model import GPUComputeProcess, GPUStatus, MachineStatus
+    from .helpers import guid
+else:
+    from data_model import GPUComputeProcess, GPUStatus, MachineStatus
+    from helpers import guid
 
 curr_dir = Path(__file__).resolve().parent
 CONFIG_PATH = curr_dir / "config.json"
@@ -28,46 +37,82 @@ logger = get_logger(max_file_size=10 * 1024 * 1024)  # 10MB
 # keep the next line fixed, only configure the logger level from config.json
 logger.setLevel(INFO)
 
-###############################################################################
-## Get configs from config.json
-
-if not CONFIG_PATH.exists():
-    logger.error(f"Config file not found: {CONFIG_PATH}")
-    sys.exit(1)
-
-with CONFIG_PATH.open(mode="r") as f:
-    configs = json.load(f)
-
-# get value from configs
-SERVER = str(configs.get("server_address", ""))
-REPORT_KEY = str(configs.get("report_key", ""))
-INTERVAL = int(configs.get("report_interval", 5))
-LOGGER_LVL = str(configs.get("logger_level", "INFO")).upper()
-
-if not SERVER:
-    logger.error("Server address not found in config.json")
-    sys.exit(1)
-
-if SERVER.endswith("/"):
-    SERVER = SERVER[:-1]
-
-if not SERVER.startswith("http"):
-    SERVER = "https://" + SERVER
-
-# set logger level
-if LOGGER_LVL == "DEBUG":
-    logger.setLevel(DEBUG)
-else:
-    logger.setLevel(INFO)
-
-###############################################################################
-## Constants
-
-POST_URL = SERVER + "/report"
+REQUEST_TIMEOUT = (5, 15)
+COMMAND_TIMEOUT = 10
+MAX_RECOVERY_DELAY = 300
+configs = {}
+REPORT_KEY = ""
+INTERVAL = 10
+POST_URL = ""
 HEADERS = {"Content-type": "application/json", "Accept": "application/json"}
-PUBLIC_IP: str = ""
-MACHINE_ID = guid()
-logger.info(f"This Machine ID: {MACHINE_ID}")
+PUBLIC_IP = ""
+MACHINE_ID = None
+_PROCESS_SAMPLES: dict[int, tuple[float, float, float]] = {}
+
+
+def load_config(path: Path) -> dict:
+    with path.open(encoding="utf-8") as file:
+        config = json.load(file)
+    if not isinstance(config, dict):
+        raise ValueError("Config must be a JSON object")
+    server = config.get("server_address")
+    key = config.get("report_key")
+    interval = config.get("report_interval", 10)
+    if not isinstance(server, str) or not server.strip():
+        raise ValueError("server_address must be a nonempty string")
+    server = server.strip().rstrip("/")
+    if "://" not in server:
+        server = "https://" + server
+    parsed = urlsplit(server)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(
+            "server_address must be an HTTP(S) URL without credentials, query, or fragment"
+        )
+    # Accessing port also validates malformed or out-of-range ports.
+    parsed.port
+    if (
+        not isinstance(key, str)
+        or not 16 <= len(key) <= 64
+        or not key.isascii()
+        or not key.isalnum()
+    ):
+        raise ValueError("report_key must contain 16–64 ASCII letters or digits")
+    if (
+        isinstance(interval, bool)
+        or not isinstance(interval, int)
+        or not 1 <= interval <= 86400
+    ):
+        raise ValueError(
+            "report_interval must be an integer between 1 and 86400 seconds"
+        )
+    return {
+        **config,
+        "server_address": server,
+        "report_key": key,
+        "report_interval": interval,
+    }
+
+
+def configure(path: Path = CONFIG_PATH) -> None:
+    global configs, REPORT_KEY, INTERVAL, POST_URL, MACHINE_ID
+    configs = load_config(path)
+    REPORT_KEY = configs["report_key"]
+    INTERVAL = configs["report_interval"]
+    POST_URL = configs["server_address"] + "/report"
+    MACHINE_ID = guid()
+    if not MACHINE_ID:
+        raise ValueError("Could not determine a stable machine ID")
+    logger.setLevel(
+        DEBUG if str(configs.get("logger_level", "INFO")).upper() == "DEBUG" else INFO
+    )
+
 
 ###############################################################################
 ## Networks
@@ -75,7 +120,7 @@ logger.info(f"This Machine ID: {MACHINE_ID}")
 
 def google_is_reachable():
     try:
-        sock = socket.create_connection(("www.google.com", 80))
+        sock = socket.create_connection(("www.google.com", 80), timeout=5)
         if sock is not None:
             sock.close()
         return True
@@ -87,7 +132,7 @@ def google_is_reachable():
 def is_connected() -> bool:
     # Ref: https://stackoverflow.com/a/40283805
     try:
-        sock = socket.create_connection(("1.1.1.1", 53))
+        sock = socket.create_connection(("1.1.1.1", 53), timeout=5)
         if sock is not None:
             sock.close()
         return True
@@ -104,12 +149,15 @@ def get_ip_addresses(family):
                 yield (interface, snic.address)
 
 
-def get_ip() -> str:
+def get_ip() -> dict:
     info = {}
     try:
         hostname = socket.gethostname()
         info["hostname"] = hostname
-        info["local_ip"] = socket.gethostbyname(hostname)
+        try:
+            info["local_ip"] = socket.gethostbyname(hostname)
+        except OSError:
+            info["local_ip"] = ""
         info["ipv4s"] = list(get_ip_addresses(socket.AF_INET))
         info["ipv6s"] = list(get_ip_addresses(socket.AF_INET6))
         info["public_ip"] = get_public_ip()
@@ -138,9 +186,9 @@ def get_public_ip() -> str:
     if not PUBLIC_IP:
         try:
             # https://www.ipify.org/
-            PUBLIC_IP = requests.get(
-                "https://api64.ipify.org", timeout=5
-            ).content.decode("utf-8")
+            response = requests.get("https://api64.ipify.org", timeout=REQUEST_TIMEOUT)
+            response.raise_for_status()
+            PUBLIC_IP = str(ipaddress.ip_address(response.text.strip()))
         except Exception as e:
             logger.error(e)
 
@@ -193,12 +241,14 @@ def run_command(command: str) -> Tuple[bool, str]:
             shlex.split(command),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            timeout=COMMAND_TIMEOUT,
+            env={**os.environ, "LC_ALL": "C"},
         )
         if completed_proc.returncode != 0:
             success = False
         else:
             success = True
-        output = completed_proc.stdout.decode("utf-8").strip()
+        output = completed_proc.stdout.decode("utf-8", errors="replace").strip()
     except Exception as e:
         logger.error(e)
         success = False
@@ -225,10 +275,12 @@ def run_shell_command(command: str) -> Tuple[bool, str]:
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            timeout=COMMAND_TIMEOUT,
+            env={**os.environ, "LC_ALL": "C"},
             shell=True,
         )
-        output = completed_proc.stdout.decode("utf-8").strip()
-        success = True
+        output = completed_proc.stdout.decode("utf-8", errors="replace").strip()
+        success = completed_proc.returncode == 0
     except Exception as e:
         logger.error(e)
         output = str(e)
@@ -253,7 +305,10 @@ def _get_sys_uptime() -> Tuple[float, str]:
     if not success:
         return -1, "NA"
 
-    uptime = float(output.split()[0])
+    try:
+        uptime = float(output.split()[0])
+    except (ValueError, IndexError):
+        return -1, "NA"
     days = int(uptime // 86400)
     hours = int((uptime % 86400) // 3600)
     minutes = int((uptime % 3600) // 60)
@@ -313,7 +368,10 @@ def _get_cpu_cores() -> int:
     """
     cmd = "awk -F: '/processor/ {core++} END {print core}' /proc/cpuinfo"
     success, output = run_command(cmd)
-    return int(output) if success else 0
+    try:
+        return int(output) if success else 0
+    except ValueError:
+        return psutil.cpu_count() or 0
 
 
 def _get_mac_address() -> str:
@@ -351,17 +409,11 @@ def _convert_size_str_to_GiB(size_str: str) -> float:
     """
     Convert the human readable storage size string to a float number in Gigabytes (GiB).
     """
-    size_str = size_str.strip()
-    if size_str.endswith("T"):
-        return float(size_str.strip("T")) * 1024
-    elif size_str.endswith("G"):
-        return float(size_str.strip("G"))
-    elif size_str.endswith("M"):
-        return float(size_str.strip("M")) / 1024
-    elif size_str.endswith("K"):
-        return float(size_str.strip("K")) / 1024 / 1024
-    else:
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)([KMGTPE]?)", size_str.strip())
+    if not match:
         return -1
+    powers = {"": 0, "K": 1, "M": 2, "G": 3, "T": 4, "P": 5, "E": 6}
+    return float(match[1]) * 1024 ** (powers[match[2]] - 3)
 
 
 def get_disk_info() -> List[Dict[str, Any]]:
@@ -403,7 +455,7 @@ def get_disk_info() -> List[Dict[str, Any]]:
                              Malformed lines are skipped with debug logging.
     """
     disk_info: List[Dict[str, Any]] = []
-    cmd = "df -x tmpfs -x squashfs -x devtmpfs -x vfat -x efivarfs -hT"
+    cmd = "df -x tmpfs -x squashfs -x devtmpfs -x vfat -x efivarfs -hPT"
     success, output = run_command(cmd)
     if not success:
         logger.warning(f"Failed to execute df command: {output}")
@@ -455,7 +507,7 @@ def get_disk_info() -> List[Dict[str, Any]]:
                 usage = float(usage_str_clean) / 100.0
                 # Clamp usage to [0, 1] range
                 usage = max(0.0, min(1.0, usage))
-            except (ValueError, TypeError) as e:
+            except (ValueError, TypeError):
                 logger.debug(
                     f"Skipping disk with invalid usage percentage '{usage_str}': {line}"
                 )
@@ -494,13 +546,25 @@ def _get_proc_info(pid: int) -> dict:
     try:
         proc = psutil.Process(pid)
         user = proc.username()
-        cpu_usage = round(proc.cpu_percent() / 100, 5)  # 0 ~ 1
-        cpu_mem_usage = round(proc.memory_percent() / 100, 5)  # 0 ~ 1
         _create_time = proc.create_time()
+        # A new psutil.Process.cpu_percent() always returns zero on its first call.
+        # Retain cumulative CPU samples between reports, checking for PID reuse.
+        cpu_times = proc.cpu_times()
+        cpu_total = cpu_times.user + cpu_times.system
+        sampled_at = time.monotonic()
+        previous = _PROCESS_SAMPLES.get(pid)
+        cpu_usage = None
+        if previous and previous[0] == _create_time and sampled_at > previous[1]:
+            cpu_usage = round(
+                max(0.0, (cpu_total - previous[2]) / (sampled_at - previous[1])), 5
+            )
+        _PROCESS_SAMPLES[pid] = (_create_time, sampled_at, cpu_total)
+        cpu_mem_usage = round(proc.memory_percent() / 100, 5)
         _time_now = time.time()
         proc_uptime: float = _time_now - _create_time  # seconds
         proc_uptime_str = str(datetime.timedelta(seconds=int(proc_uptime)))
-        command = " ".join(proc.cmdline())
+        # Process arguments frequently contain credentials; report only the executable name.
+        command = proc.name()
 
         return dict(
             pid=pid,
@@ -667,13 +731,17 @@ def _nvidia_exist() -> bool:
         bool: True if nvidia-smi command exists and GPU is detected.
               False otherwise.
     """
-    completed_proc = subprocess.run(
-        "nvidia-smi",
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        shell=True,
-    )
-    return completed_proc.returncode == 0
+    success, _ = run_command("nvidia-smi")
+    return success
+
+
+def _gpu_number(value: str) -> float | None:
+    """Unavailable NVIDIA sensors are reported as N/A or [Not Supported]."""
+    try:
+        number = float(value.strip().split()[0].rstrip("%"))
+        return number if math.isfinite(number) else None
+    except (ValueError, IndexError):
+        return None
 
 
 def get_gpu_status() -> List[GPUStatus]:
@@ -689,22 +757,27 @@ def get_gpu_status() -> List[GPUStatus]:
     lines = output.split("\n")
     if len(lines) <= 1:
         return []
-    for row in lines[1:]:
-        gpu_status = GPUStatus()
-        row = row.split(",")
+    for row in csv.reader(lines[1:]):
         if len(row) != 7:
             continue
-        gpu_status.index = int(row[0].strip())
-        gpu_status.gpu_name = row[1].strip()
-        gpu_status.gpu_usage = float(row[2].strip("% ")) / 100
-        gpu_status.temperature = float(row[3].strip())
-        gpu_status.memory_total = float(row[4].strip(" MiB"))
-        gpu_mem_used = float(row[5].strip(" MiB"))
-        gpu_status.memory_free = float(row[6].strip(" MiB"))
-        # compute used memory percentage
-        # value returned by utilization.memory is not accurate
-        gpu_status.memory_usage = round(gpu_mem_used / gpu_status.memory_total, 5)
-        gpu_status_list.append(gpu_status)
+        try:
+            index = int(row[0].strip())
+        except ValueError:
+            continue
+        utilization, temperature, total, used, free = map(_gpu_number, row[2:])
+        gpu_status_list.append(
+            GPUStatus(
+                index=index,
+                gpu_name=row[1].strip(),
+                gpu_usage=utilization / 100 if utilization is not None else None,
+                temperature=temperature,
+                memory_total=total,
+                memory_free=free,
+                memory_usage=round(used / total, 5)
+                if total and total > 0 and used is not None
+                else None,
+            )
+        )
 
     return gpu_status_list
 
@@ -727,7 +800,10 @@ def _get_gpu_uuid_index_map():
         row = row.split(",")
         if len(row) != 2:
             continue
-        gpu_uuid_index_map[row[1].strip()] = int(row[0].strip())
+        try:
+            gpu_uuid_index_map[row[1].strip()] = int(row[0].strip())
+        except ValueError:
+            continue
 
     return gpu_uuid_index_map
 
@@ -750,10 +826,13 @@ def get_gpu_compute_processes() -> List[GPUComputeProcess]:
         if len(row) != 3:
             continue
         gpu_proc = GPUComputeProcess()
-        gpu_proc.pid = int(row[0].strip())
+        try:
+            gpu_proc.pid = int(row[0].strip())
+        except ValueError:
+            continue
         gpu_proc.gpu_uuid = row[1].strip()
         gpu_proc.gpu_index = gpu_uuid_index_map.get(gpu_proc.gpu_uuid, -1)
-        gpu_proc.gpu_mem_used = float(row[2].strip(" MiB"))
+        gpu_proc.gpu_mem_used = _gpu_number(row[2])
         # TODO: compute gpu memory usage percentage
         ...
 
@@ -773,6 +852,9 @@ def get_gpu_compute_processes() -> List[GPUComputeProcess]:
 
         gpu_compute_processes.append(gpu_proc)
 
+    active_pids = {process.pid for process in gpu_compute_processes}
+    for pid in set(_PROCESS_SAMPLES) - active_pids:
+        del _PROCESS_SAMPLES[pid]
     return gpu_compute_processes
 
 
@@ -787,8 +869,6 @@ def get_status() -> MachineStatus:
     disk_info = get_disk_info()
 
     display_name = str(configs.get("display_name", "")).strip()
-    display_note = str(configs.get("display_note", "")).strip()
-    display_warning = str(configs.get("display_warning", "")).strip()
 
     status: MachineStatus = MachineStatus()
     # Custom Machine Name
@@ -819,11 +899,11 @@ def get_status() -> MachineStatus:
     # CPU
     status.cpu_model = sys_info.get("cpu_model", "")
     status.cpu_cores = sys_info.get("cpu_cores", 0)
-    status.cpu_usage = sys_usage.get("cpu_usage", "")
+    status.cpu_usage = sys_usage.get("cpu_usage")
     # RAM
-    status.ram_free = sys_usage.get("ram_free", "")
-    status.ram_total = sys_usage.get("ram_total", "")
-    status.ram_usage = sys_usage.get("ram_usage", "")
+    status.ram_free = sys_usage.get("ram_free")
+    status.ram_total = sys_usage.get("ram_total")
+    status.ram_usage = sys_usage.get("ram_usage")
     # Disk
     status.disk_info = disk_info
     # GPU
@@ -833,7 +913,7 @@ def get_status() -> MachineStatus:
     # USER
     status.users_info = get_users_info()
 
-    return status
+    return MachineStatus.model_validate(status.__dict__)
 
 
 ###############################################################################
@@ -841,18 +921,30 @@ def get_status() -> MachineStatus:
 
 
 def report_to_server(status: MachineStatus) -> bool:
-    # remove machine time
-    status.created_at = None
-    data: str = status.model_dump_json()
-    r = requests.post(POST_URL, data=data, headers=HEADERS)
-    if r.status_code != 201:
-        logger.error(f"status_code: {r.status_code}")
+    payload = status.model_dump(mode="json", exclude={"created_at"})
+    try:
+        response = requests.post(
+            POST_URL,
+            json=payload,
+            headers=HEADERS,
+            timeout=REQUEST_TIMEOUT,
+            allow_redirects=False,
+        )
+    except requests.RequestException:
+        logger.warning("Could not send status report; will retry")
         return False
-    else:
-        return True
+    if response.status_code != 201:
+        logger.error(f"status_code: {response.status_code}")
+        return False
+    return True
 
 
-def main(debug_mode: bool = False) -> None:
+def main(debug_mode: bool = False) -> int:
+    try:
+        configure()
+    except (OSError, ValueError) as exc:
+        logger.error(f"Invalid client configuration: {exc}")
+        return 1
     recovery_delay = 0  # seconds
     if debug_mode:
         from pprint import pprint
@@ -875,20 +967,13 @@ def main(debug_mode: bool = False) -> None:
         # Catch all exceptions to prevent the script from crashing
         try:
             ###################################################################
-            # Check if the machine is connected to the internet
-            if not google_is_reachable():
-                logger.warning("Not Connected to Internet.")
-                # Additive recovery delay
-                recovery_delay += 5
-                continue
-
             # Acquire the current status of the machine
             status: MachineStatus = get_status()
 
             # Debug mode: print the status to the console once and exit
             if debug_mode:
-                pprint(status.__dict__)
-                return
+                pprint(status.model_dump(exclude={"report_key"}))
+                return 0
 
             # Post the status to the server
             successful = report_to_server(status)
@@ -898,14 +983,15 @@ def main(debug_mode: bool = False) -> None:
                 recovery_delay = 0
             else:
                 # Additive recovery delay
-                recovery_delay += 5
+                recovery_delay = min(recovery_delay + 5, MAX_RECOVERY_DELAY)
 
         except Exception as e:
             logger.error(e)
-            recovery_delay += 5
+            recovery_delay = min(recovery_delay + 5, MAX_RECOVERY_DELAY)
             if debug_mode:
                 logger.exception(e)
+                return 1
 
 
 if __name__ == "__main__":
-    main(debug_mode=False)
+    sys.exit(main(debug_mode=False))

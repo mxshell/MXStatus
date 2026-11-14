@@ -9,12 +9,24 @@ To install the Client on your workstations:
 2. Prepare a Python virtual environment for the Client:
 
     ```bash
-    python3 -m venv venv
+    python3.12 -m venv venv
     source venv/bin/activate
     pip install -r requirements.txt
     ```
 
-3. Ensure that you have modified the [config file](client/config.json) to specify the server address.
+3. Edit [config.json](config.json): set `server_address` to your HTTPS server URL,
+   and `report_key` to a key configured or created on the server. The example key is
+   deliberately empty; the client exits with an error until configured. Keys must
+   contain 16–64 ASCII letters or digits. `report_interval` must be an integer from
+   1 to 86400 seconds. Use Python 3.12 or newer. Restrict the config file's
+   permissions with `chmod 600 client/config.json` and do not commit real keys.
+
+   Requests use 5-second connect and 15-second read timeouts; commands have a
+   10-second timeout. Failed reports are retried with at most 300 seconds of extra
+   delay. The client contacts the configured server directly, so private networks
+   do not need access to Google. GPU process telemetry includes executable names,
+   without command-line arguments that might contain passwords or tokens. Per-process
+   CPU usage is measured between reports and is unavailable on the first sample.
 4. Dry-run the installation:
 
     ```bash
