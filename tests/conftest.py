@@ -9,6 +9,7 @@ from server.main import app
 def api(monkeypatch):
     for key in ("REPORT_KEY", "VIEW_KEY", "MACHINE_IDS", "ADMIN_USER_ID"):
         monkeypatch.delenv("MXSTATUS_" + key, raising=False)
+    monkeypatch.setenv("MXSTATUS_DATA_PATH", ":memory:")
     monkeypatch.setenv("MXSTATUS_ADMIN_TOKEN", "admin-token-for-tests-" + "x" * 32)
     monkeypatch.setattr(db, "DB", db.Database())
     with TestClient(app, raise_server_exceptions=False) as client:

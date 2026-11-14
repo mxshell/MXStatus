@@ -1,22 +1,26 @@
 import logging
 import os
-import secrets
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 
 import server.database as db
+from server.admin import router as panel_api
+from server.admin_models import ClientSettings
 from server.data_model import MachineStatus, ViewGroup
-from server.middleware import RequestSizeLimit
+from server.middleware import AdminSecurityHeaders, RequestSizeLimit
+from server.security import require_admin
 
 logger = logging.getLogger(__name__)
 app = FastAPI()
 app.add_middleware(RequestSizeLimit, max_bytes=1024 * 1024)
+app.add_middleware(AdminSecurityHeaders)
 origins = [
     origin.strip()
     for origin in os.environ.get("MXSTATUS_CORS_ORIGINS", "").split(",")
@@ -57,25 +61,6 @@ async def internal_error(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
-bearer = HTTPBearer(auto_error=False)
-
-
-async def require_admin(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
-):
-    token = os.environ.get("MXSTATUS_ADMIN_TOKEN", "")
-    if len(token) < 32:
-        raise HTTPException(status_code=503, detail="Admin access is not configured")
-    if credentials is None or not secrets.compare_digest(
-        credentials.credentials.encode(), token.encode()
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid admin credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-
 admin = APIRouter(dependencies=[Depends(require_admin)])
 
 
@@ -86,13 +71,14 @@ async def hello():
 
 @admin.get("/get", response_model=list[MachineStatus])
 async def get_status():
-    return list(db.DB.STATUS_DATA.values())
+    return [db.get_report(machine_id) for machine_id in db.DB.STATUS_DATA]
 
 
 @app.post("/report", status_code=201)
 async def report_status(status: MachineStatus):
     db.store_new_report(status)
-    return {"msg": "OK"}
+    settings = db.DB.CLIENT_SETTINGS.get(status.machine_id, ClientSettings())
+    return {"msg": "OK", "config": {"report_interval": settings.report_interval}}
 
 
 @app.get("/view", response_model=list[MachineStatus])
@@ -102,15 +88,17 @@ async def view_status(view_key: str):
 
 @app.get("/view_machine", response_model=MachineStatus)
 async def view_machine(
-    view_key: str, machine_id: str, seconds_to_expire: Annotated[int, Query(gt=0)] = 300
+    view_key: str,
+    machine_id: str,
+    seconds_to_expire: Annotated[int | None, Query(gt=0)] = None,
 ):
     """Return 404 for unavailable machines, 417 for stale reports, 418 for missing GPUs."""
     status = db.get_view_machine(view_key, machine_id)
     if status is None:
         raise HTTPException(status_code=404, detail="Machine Not Found")
-    if (
-        datetime.now(timezone.utc) - status["created_at"]
-    ).total_seconds() > seconds_to_expire:
+    if (datetime.now(timezone.utc) - status["created_at"]).total_seconds() > (
+        seconds_to_expire or db.DB.SETTINGS.offline_after_seconds
+    ):
         raise HTTPException(status_code=417, detail="Status Expired; Machine Offline")
     if not status.get("gpu_status"):
         raise HTTPException(status_code=418, detail="GPU Not Available")
@@ -160,3 +148,10 @@ async def set_machines_in_view_group(user_id: str, view_key: str, machines: list
 
 
 app.include_router(admin)
+
+app.include_router(panel_api)
+app.mount(
+    "/admin",
+    StaticFiles(directory=Path(__file__).parent / "static", html=True),
+    name="admin-panel",
+)

@@ -14,7 +14,8 @@ To install the Client on your workstations:
     pip install -r requirements.txt
     ```
 
-3. Edit [config.json](config.json): set `server_address` to your HTTPS server URL,
+3. Download `config.json` from the server’s `/admin/` panel using **Connect a client**,
+   or edit [config.json](config.json): set `server_address` to your HTTPS server URL,
    and `report_key` to a key configured or created on the server. The example key is
    deliberately empty; the client exits with an error until configured. Keys must
    contain 16–64 ASCII letters or digits. `report_interval` must be an integer from
@@ -70,3 +71,7 @@ To remove the Client from a workstation, run:
 ```bash
 ./client/installer uninstall
 ```
+
+Reporting intervals can also be set per client in the admin panel. Updated clients
+apply the change after their next successful report; clearing the override restores
+the local interval. Blocking reports does not stop the client service.

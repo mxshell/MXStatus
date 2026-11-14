@@ -936,6 +936,18 @@ def report_to_server(status: MachineStatus) -> bool:
     if response.status_code != 201:
         logger.error(f"status_code: {response.status_code}")
         return False
+    try:
+        remote = response.json().get("config")
+        if isinstance(remote, dict) and "report_interval" in remote:
+            interval = remote["report_interval"]
+            if interval is None:
+                interval = configs.get("report_interval", 10)
+            if type(interval) is int and 1 <= interval <= 86400:
+                global INTERVAL
+                INTERVAL = interval
+    except (ValueError, AttributeError):
+        # Older servers may return a non-JSON acknowledgement.
+        pass
     return True
 
 

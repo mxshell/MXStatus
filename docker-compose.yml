@@ -14,3 +14,9 @@ services:
             MXSTATUS_VIEW_KEY: "${MXSTATUS_VIEW_KEY:-}"
             MXSTATUS_MACHINE_IDS: "${MXSTATUS_MACHINE_IDS:-}"
             MXSTATUS_CORS_ORIGINS: "${MXSTATUS_CORS_ORIGINS:-}"
+            MXSTATUS_DATA_PATH: "/app/data/mxstatus.sqlite3"
+        volumes:
+            - mxstatus-data:/app/data
+
+volumes:
+    mxstatus-data:

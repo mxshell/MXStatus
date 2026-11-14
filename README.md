@@ -16,9 +16,9 @@ The Client component is installed on each Linux machine that you want to monitor
 
 The Server is deployed on a publicly accessible cloud server with a fixed IP address. It runs API endpoints to receive status updates from all clients. It also handles requests from the Web Client.
 
-#### Web Client
+#### Admin Web Panel
 
-The Web Client serves as the user interface to interact with the server and view the status of the monitored workstations.
+Open `/admin/` on your server to manage clients, reporting keys, view groups, and monitoring settings. The panel is bundled with FastAPI and uses your admin token for access.
 
 ## Deployment
 
@@ -82,6 +82,9 @@ Export the [server configuration](server/README.md#configure-access), then run f
 uv run uvicorn server.main:app --reload --port 5000 --no-access-log
 ```
 
+Once started, open **http://localhost:5000/admin/** and sign in with your configured
+admin token. Create a reporting key and use **Connect a client** to download a config.
+
 ### Run Client
 
 For testing the Client component:
@@ -104,6 +107,7 @@ For testing the Client component:
 uv run pytest
 uv run ruff check server client tests
 uv run ruff format --check server client tests
+node --test tests/frontend.test.cjs
 ```
 
 After changing dependencies, regenerate the Docker/pip requirements from the lockfile:
@@ -112,5 +116,5 @@ After changing dependencies, regenerate the Docker/pip requirements from the loc
 uv export --no-dev --no-emit-project --no-hashes --output-file requirements.txt
 ```
 
-The server currently stores state in memory. Run one worker only; API-created
-keys and views do not survive restarts. See [server limitations and bootstrap configuration](server/README.md).
+Management settings, keys, client registrations, and views are stored in SQLite.
+Telemetry is held in memory, so run one worker only. See [server setup and storage](server/README.md).

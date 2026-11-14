@@ -133,3 +133,6 @@ dmypy.json
 
 # Ruff cache
 .ruff_cache/
+
+# Local server management state
+/data/

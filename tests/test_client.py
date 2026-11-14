@@ -249,3 +249,21 @@ def test_client_payload_roundtrip_with_partial_metrics(api, registered, monkeypa
     assert report["ram_usage"] is None
     assert report["disk_info"][0]["avail"] == 0
     assert report["users_info"]["all_users"] == ["al**e"]
+
+
+@pytest.mark.parametrize(
+    "override,expected",
+    [(30, 30), (None, 12), (0, 99), (True, 99), ("10", 99), (100000, 99)],
+)
+def test_client_applies_valid_remote_interval(monkeypatch, override, expected):
+    monkeypatch.setattr(client, "INTERVAL", 99)
+    monkeypatch.setattr(client, "configs", {"report_interval": 12})
+    monkeypatch.setattr(
+        client.requests,
+        "post",
+        lambda *args, **kwargs: SimpleNamespace(
+            status_code=201, json=lambda: {"config": {"report_interval": override}}
+        ),
+    )
+    assert client.report_to_server(MachineStatus(machine_id="m", report_key="key"))
+    assert client.INTERVAL == expected

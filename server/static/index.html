@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#172a46" />
+    <title>MXStatus · Administration</title>
+    <link rel="icon" type="image/svg+xml" href="/admin/favicon.svg" />
+    <link rel="stylesheet" href="/admin/styles.css" />
+    <script src="/admin/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <section id="login" class="login-layout">
+      <div class="login-story">
+        <a class="brand" href="/admin/"
+          ><span class="brand-mark">M<span>×</span></span
+          ><span>MXStatus<small>OPERATIONS CONSOLE</small></span></a
+        >
+        <div class="login-story-body">
+          <div class="eyebrow">YOUR INFRASTRUCTURE, IN VIEW</div>
+          <h1>Every machine.<br />One clear picture.</h1>
+          <p>
+            A shared workspace for your fleet’s health,<br />access, and
+            reporting.
+          </p>
+          <div class="rack" aria-hidden="true">
+            <div class="rack-top">
+              <span>FLEET CONTROL</span><span>MX / STATUS</span>
+            </div>
+            <div class="rack-unit">
+              <span class="rack-light"></span><i></i><i></i><i></i><i></i
+              ><span class="rack-slots">▤</span>
+            </div>
+            <div class="rack-unit">
+              <span class="rack-light"></span><i></i><i></i><i></i><i></i
+              ><span class="rack-slots">▤</span>
+            </div>
+            <div class="rack-unit">
+              <span class="rack-light"></span><i></i><i></i><i></i><i></i
+              ><span class="rack-slots">▤</span>
+            </div>
+            <div class="rack-bottom">
+              SYSTEM VISIBILITY <span>●</span> BUILT IN
+            </div>
+          </div>
+        </div>
+        <div class="login-footer">Observe. Configure. Keep things running.</div>
+      </div>
+      <div class="login-form-wrap">
+        <form id="login-form" class="login-form">
+          <div class="login-emblem" aria-hidden="true">↗</div>
+          <div class="eyebrow">ADMINISTRATOR ACCESS</div>
+          <h2>Welcome to your<br />control room.</h2>
+          <p>
+            Enter this server’s admin token to manage your clients and
+            configuration.
+          </p>
+          <label for="admin-token">Admin token</label
+          ><input
+            id="admin-token"
+            type="password"
+            placeholder="Enter your admin token"
+            autocomplete="off"
+            spellcheck="false"
+            required
+          />
+          <p id="login-error" class="form-error" role="alert" hidden></p>
+          <button class="button primary full" type="submit">
+            Open console <span aria-hidden="true">→</span>
+          </button>
+          <div class="login-note">
+            <span aria-hidden="true">◇</span
+            ><span
+              >Your token stays in this tab’s memory.<br />Reloading or signing
+              out ends your session.</span
+            >
+          </div>
+          <details class="setup-help">
+            <summary>First time setting up?</summary>
+            <p>
+              Set <code>MXSTATUS_ADMIN_TOKEN</code> on the server to a random
+              token of at least 32 characters. Restart the server, then enter
+              that token here.
+            </p>
+          </details>
+        </form>
+      </div>
+    </section>
+    <div id="console" class="console" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="#clients"
+          ><span class="brand-mark">M<span>×</span></span
+          ><span>MXStatus<small>OPERATIONS CONSOLE</small></span></a
+        >
+        <div class="workspace-label">WORKSPACE</div>
+        <nav aria-label="Main navigation" id="navigation">
+          <button type="button" data-page="clients" class="nav-link active">
+            <span data-icon="servers"></span>Clients
+            <span id="nav-count" class="nav-count">0</span></button
+          ><button type="button" data-page="keys" class="nav-link">
+            <span data-icon="key"></span>Reporting keys</button
+          ><button type="button" data-page="views" class="nav-link">
+            <span data-icon="layers"></span>View groups</button
+          ><button type="button" data-page="settings" class="nav-link">
+            <span data-icon="settings"></span>Server settings
+          </button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="server-identity">
+            <span class="server-avatar" data-icon="server"></span>
+            <div>
+              <strong id="sidebar-server">MXStatus</strong
+              ><span>Administrator</span>
+            </div>
+          </div>
+          <button type="button" class="signout" id="signout">
+            <span data-icon="logout"></span>Sign out
+          </button>
+        </div>
+      </aside>
+      <div class="main-shell">
+        <header class="topbar">
+          <div class="breadcrumb">
+            Workspace <span>/</span> <strong id="breadcrumb">Clients</strong>
+          </div>
+          <div class="topbar-end">
+            <span class="live-indicator"
+              ><i></i><span id="connection-state">Live connection</span></span
+            ><span class="admin-avatar" aria-label="Administrator">A</span>
+          </div>
+        </header>
+        <main id="main" tabindex="-1">
+          <div class="page-heading">
+            <div>
+              <div id="page-eyebrow" class="eyebrow">FLEET OVERVIEW</div>
+              <h1 id="page-title">Your clients</h1>
+              <p id="page-description">
+                A live view of the machines that keep your work moving.
+              </p>
+            </div>
+            <div class="heading-actions">
+              <button
+                type="button"
+                class="button secondary icon-button"
+                id="refresh"
+                aria-label="Refresh data"
+              >
+                <span data-icon="refresh"></span></button
+              ><button type="button" class="button primary" id="primary-action">
+                <span data-icon="plus"></span>Connect a client
+              </button>
+            </div>
+          </div>
+          <div
+            id="connection-error"
+            class="banner error"
+            role="alert"
+            hidden
+          ></div>
+          <section id="page-content" aria-live="off"></section>
+          <footer class="main-footer">
+            <span id="last-sync">Waiting for data</span
+            ><span
+              >MXStatus <span class="footer-separator">/</span> Server
+              administration</span
+            >
+          </footer>
+        </main>
+      </div>
+    </div>
+    <dialog id="modal" aria-labelledby="modal-title">
+      <div class="modal-top">
+        <div>
+          <div class="eyebrow" id="modal-eyebrow">WORKSPACE</div>
+          <h2 id="modal-title"></h2>
+        </div>
+        <button
+          type="button"
+          class="button icon-button ghost"
+          id="modal-close"
+          aria-label="Close dialog"
+        >
+          ×
+        </button>
+      </div>
+      <div id="modal-content"></div>
+    </dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+  </body>
+</html>
